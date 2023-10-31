@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using AOT; // MonopInvokeCallback
 using System.Runtime.InteropServices;
 using System;
@@ -17,6 +18,8 @@ public class MyInteractionEvent : UnityEvent<int> { }
 
 public class OPCUA_SERVER_DLL : MonoBehaviour
 {
+    public Slider slider;
+
     /// Background thread for TcpServer workload.  
     private Thread My_Thread;
     private Mutex mutexObj;
@@ -34,12 +37,16 @@ public class OPCUA_SERVER_DLL : MonoBehaviour
    
 
 
-    //Получить хендл класса по имени (ambassador->getObjectClassHandle(L"HLAobjectRoot.ObjectClass0"))
+    //
     [DllImport("DLL1")]
-    public static extern int testServer(int a, int b);
+    public static extern int testServerCreate(int a, int b);
     //public static extern int GetObjectClassHandle(StringBuilder className, int length);
 
+    [DllImport("DLL1")]
+    public static extern int testServerUpdate(int a, int b);
     
+
+
 
     //callback для Debug'а
     private delegate void DebugCallback(IntPtr message, int color, int size);
@@ -81,7 +88,7 @@ public class OPCUA_SERVER_DLL : MonoBehaviour
 
         int a = 1;
         int b = 1;
-        testServer(a, b);
+        testServerCreate(a, b);
 
 
     }
@@ -147,6 +154,10 @@ void OnDestroy()
         {
             //evokeCallback(0.1);
             //getObjectClassHandle();
+
+            int a = (int)slider.value;
+            int b = 1;
+            testServerUpdate(a,b);
         }
     }
 

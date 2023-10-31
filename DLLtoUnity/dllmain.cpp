@@ -113,11 +113,12 @@ static void addMatrixVariable(UA_Server* server)
  * implementation that can also be reached over the network by an OPC UA client.
  */
 
-static void writeVariable(UA_Server* server) {
+static void writeVariable(UA_Server* server, int value) 
+{
     UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"the.answer");
 
     /* Write a different integer value */
-    UA_Int32 myInteger = 43;
+    UA_Int32 myInteger = value;
     UA_Variant myVar;
     UA_Variant_init(&myVar);
     UA_Variant_setScalar(&myVar, &myInteger, &UA_TYPES[UA_TYPES_INT32]);
@@ -170,14 +171,21 @@ static volatile UA_Boolean running = true;
 //    running = false;
 //}
 
-extern "C" __declspec(dllexport) int testServer(int a, int b)
+
+
+
+UA_Server* server;
+UA_Boolean waitInternal = false;
+
+extern "C" __declspec(dllexport) int testServerCreate(int a, int b)
 {
    // signal(SIGINT, stopHandler);
    // signal(SIGTERM, stopHandler);
     
    SendLog(L"debug DLL:testServer", 0);
 
-    UA_Server* server = UA_Server_new();
+    //UA_Server* server = UA_Server_new();
+    server = UA_Server_new();
     UA_ServerConfig_setDefault(UA_Server_getConfig(server));
     UA_ServerConfig* config = UA_Server_getConfig(server);
     config->verifyRequestTimestamp = UA_RULEHANDLING_ACCEPT;
@@ -188,7 +196,7 @@ extern "C" __declspec(dllexport) int testServer(int a, int b)
     SendLog(L"debug DLL:addVariable", 0);
     addVariable(server);
     addMatrixVariable(server);
-    writeVariable(server);
+    writeVariable(server,54321);
     writeWrongVariable(server);
 
                     //UA_StatusCode retval = UA_Server_run(server, &running);
@@ -197,7 +205,7 @@ extern "C" __declspec(dllexport) int testServer(int a, int b)
 
     /* Should the server networklayer block (with a timeout) until a message
        arrives or should it return immediately? */
-    UA_Boolean waitInternal = false;
+    //UA_Boolean waitInternal = false;
 
 
     SendLog(L"debug DLL:UA_Server_run_startup", 0);
@@ -205,32 +213,41 @@ extern "C" __declspec(dllexport) int testServer(int a, int b)
     if (retval != UA_STATUSCODE_GOOD)
         goto cleanup;
 
-    while (running) {
-        /* timeout is the maximum possible delay (in millisec) until the next
-           _iterate call. Otherwise, the server might miss an internal timeout
-           or cannot react to messages with the promised responsiveness. */
-           /* If multicast discovery server is enabled, the timeout does not not consider new input data (requests) on the mDNS socket.
-            * It will be handled on the next call, which may be too late for requesting clients.
-            * if needed, the select with timeout on the multicast socket server->mdnsSocket (see example in mdnsd library)
-            */
+    //!!!!
+    return 0;
+
+    /*
+    while (running) 
+    {
+        // timeout is the maximum possible delay (in millisec) until the next
+        //   _iterate call. Otherwise, the server might miss an internal timeout
+        //   or cannot react to messages with the promised responsiveness.
+            //   If multicast discovery server is enabled, the timeout does not not consider new input data (requests) on the mDNS socket.
+            //   It will be handled on the next call, which may be too late for requesting clients.
+            //  if needed, the select with timeout on the multicast socket server->mdnsSocket (see example in mdnsd library)
+        
         UA_UInt16 timeout = UA_Server_run_iterate(server, waitInternal);
 
-        /* Now we can use the max timeout to do something else. In this case, we
-           just sleep. (select is used as a platform-independent sleep
-           function.) */
+        // Now we can use the max timeout to do something else. In this case, we just sleep. (select is used as a platform-independent sleep function.) 
         struct timeval tv;
         tv.tv_sec = 0;
         tv.tv_usec = timeout * 1000;
         select(0, NULL, NULL, NULL, &tv);
     }
     retval = UA_Server_run_shutdown(server);
+    */
 
 cleanup:
     UA_Server_delete(server);
     return retval == UA_STATUSCODE_GOOD ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
-
+extern "C" __declspec(dllexport) int testServerUpdate(int a, int b)
+{
+    writeVariable(server, a);
+    UA_UInt16 timeout = UA_Server_run_iterate(server, waitInternal);
+    return 0;
+}
 
 
 
