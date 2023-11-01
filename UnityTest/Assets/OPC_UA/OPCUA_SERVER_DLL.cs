@@ -163,7 +163,7 @@ public class OPCUA_SERVER_DLL : MonoBehaviour
 
 
 
-    public void testExampleClientFunction()
+    public void ClientConnect()
     {
         //StringBuilder varzname = new StringBuilder("AAA", 100);
         //Debug.Log("testClient=" + testClient(varzname).ToString());
@@ -173,22 +173,7 @@ public class OPCUA_SERVER_DLL : MonoBehaviour
         int ret = OPC_ClientConnect(addr);
         Debug.Log("OPC_ClientConnect=" + ret.ToString());
 
-         //4. int OPC_ClientUpdate () - обновление клиента
-         OPC_ClientUpdate();
-
-        //3. double OPC_ClientReadValueDouble (description) //(char*)"the.answer"
-        StringBuilder varname = new StringBuilder("AAA", 100);
-        Debug.Log("OPC_ClientReadValueDouble=" + OPC_ClientReadValueDouble(varname).ToString());
-
-         OPC_ClientUpdate();
-
-        //2. int  (description, value) //(char*)"the.answer", double
-        StringBuilder var2name = new StringBuilder("AAA", 100);
-        int ret3 = OPC_ClientWriteValueDouble(var2name, 321);
-        Debug.Log("OPC_ClientWriteValueDouble=" + ret3.ToString());
-
-        OPC_ClientUpdate();
-
+         
 
         //Debug.Log("OPC_ClientUpdate=" + ret4.ToString());
 
@@ -199,7 +184,28 @@ public class OPCUA_SERVER_DLL : MonoBehaviour
     }
 
 
+    public void ClientRead()
+    {
+        //4. int OPC_ClientUpdate () - обновление клиента
+        OPC_ClientUpdate();
 
+        //3. double OPC_ClientReadValueDouble (description) //(char*)"the.answer"
+        StringBuilder varname = new StringBuilder("AAA", 100);
+        Debug.Log("OPC_ClientReadValueDouble=" + OPC_ClientReadValueDouble(varname).ToString());
+    }
+
+    public void ClientWrite()
+    {
+        //2. int  (description, value) //(char*)"the.answer", double
+        StringBuilder var2name = new StringBuilder("AAA", 100);
+        int ret3 = OPC_ClientWriteValueDouble(var2name, 321);
+        Debug.Log("OPC_ClientWriteValueDouble=" + ret3.ToString());
+
+        //4. int OPC_ClientUpdate () - обновление клиента
+        OPC_ClientUpdate();
+    }
+
+   
 
 
     public void startServer()
