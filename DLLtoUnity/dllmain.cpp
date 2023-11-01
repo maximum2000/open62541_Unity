@@ -1,4 +1,37 @@
-﻿#include <stdlib.h>
+﻿/*
+tutorial_server_object - инстансы
+tutorial_server_variabletype - массивы
+tutorial_server_monitoreditems - подписка сервера
+
+tutorial_server_method_async
+tutorial_server_method - vtnjls / bynthfrwbb
+
+tutorial_server_events - Triggering an event
+
+tutorial_datatypes - строки / массивы / числа
+
+server_inheritance - примеры объектов
+..............................................................
+
+tutorial_client_firststeps - чтение переменной
+
+tutorial_client_events - подписка на мониторинг переменной и события
+
+client_subscription_loop - подписка
+
+client_connect
+client_connect_loop - автоподключение
+
+client_async - вызов метода
+
+client - чтение списка всего на сервере
+
+UA_StatusCode retval = UA_Client_connectUsername(client, "opc.tcp://localhost:4840", "paula", "paula123");
+
+pubsub_realtime - реалтайм
+*/
+
+#include <stdlib.h>
 #include <string>
 
 
