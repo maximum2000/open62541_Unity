@@ -18,6 +18,7 @@
 #include <signal.h>
 
 //функции общие
+// RegisterDebugCallback - регистрация callback'ов
 //1. SendLog - дебаг-вывод в unity
 
 //функции сервера:
@@ -234,14 +235,15 @@ extern "C" __declspec(dllexport) int OPC_ClientReadValueDouble(char* description
     // NodeId of the variable holding the current time 
     UA_NodeId myDoubleNodeId = UA_NODEID_STRING(1, description); //(char*)"the.answer"
     UA_StatusCode retval = UA_Client_readValueAttribute(client, myDoubleNodeId, &value);
-    double val = 0;
     if (retval == UA_STATUSCODE_GOOD && UA_Variant_hasScalarType(&value, &UA_TYPES[UA_TYPES_DOUBLE]))
     {
-        val = *(UA_Double*)value.data;
+        double val = *(UA_Double*)value.data;
         // Clean up 
         UA_Variant_clear(&value);
         return val;
     }
+    SendLog(L"debug DLL:5", 0);
+
     // Clean up 
     UA_Variant_clear(&value);
     return -1;
@@ -476,14 +478,14 @@ extern "C" __declspec(dllexport) int testServerRead()
 
 
 
-extern "C" __declspec(dllexport) int testClient()
+extern "C" __declspec(dllexport) double testClient(char* description)
 {
-    UA_Client* client = UA_Client_new();
-    UA_ClientConfig_setDefault(UA_Client_getConfig(client));
-    UA_StatusCode retval = UA_Client_connect(client, "opc.tcp://localhost:4840");
+    UA_Client* client2 = UA_Client_new();
+    UA_ClientConfig_setDefault(UA_Client_getConfig(client2));
+    UA_StatusCode retval = UA_Client_connect(client2, "opc.tcp://localhost:4840");
     if (retval != UA_STATUSCODE_GOOD) 
     {
-        UA_Client_delete(client);
+        UA_Client_delete(client2);
         return (int)retval;
     }
 
@@ -493,75 +495,47 @@ extern "C" __declspec(dllexport) int testClient()
     UA_Variant_init(&value);
 
     // NodeId of the variable holding the current time 
-    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"AAA");
-    retval = UA_Client_readValueAttribute(client, myIntegerNodeId, &value);
+    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, description);//(char*)"AAA"
+    retval = UA_Client_readValueAttribute(client2, myIntegerNodeId, &value);
 
     
 
-    int p = 0;
-    if (retval == UA_STATUSCODE_GOOD && UA_Variant_hasScalarType(&value, &UA_TYPES[UA_TYPES_INT32])) 
+    double p = -4;
+    if (retval == UA_STATUSCODE_GOOD && UA_Variant_hasScalarType(&value, &UA_TYPES[UA_TYPES_DOUBLE])) //UA_TYPES_INT32
     {
-        p = *(UA_Int32*)value.data;
+        p = *(UA_Double*)value.data; //UA_Int32
     }
+
+
+
+
+    {
+        UA_NodeId myDoubleNodeId = UA_NODEID_STRING(1, description);
+
+        //Write a different double value
+        UA_Double myDouble = 125;
+        //UA_Variant myVar;
+        //UA_Variant_init(&myVar);
+        //UA_Variant_setScalar(&myVar, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+        //UA_Client_writeValueAttribute(client, myDoubleNodeId, &myVar);
+
+        UA_Variant* myVariant = UA_Variant_new();
+        UA_Variant_setScalarCopy(myVariant, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+        UA_Client_writeValueAttribute(client2, myDoubleNodeId, myVariant);
+        UA_Variant_delete(myVariant);
+    }
+
+
+
+
+
+
+
+
 
     // Clean up 
     UA_Variant_clear(&value);
-    UA_Client_delete(client); // Disconnects the client internally 
+    UA_Client_delete(client2); // Disconnects the client internally 
     return p;
 }
-
-
-
-
-
-//-------------------------------------------------------------------------------------------------------------
-
-//nothrow
-
-/*
-
-//первичное подключение к серверу (RTInode)
-int Connect(char* myString, int length)
-{
-    std::wstringstream cls1;
-    cls1 << myString;
-    IP  = cls1.str();
-
-    //OpenRTI::RTI1516ESimpleAmbassador ambassador;
-    ambassador = new OpenRTI::RTI1516EAmbassadorLContent();
-    ambassador->setUseDataUrlObjectModels(false);
-
-    
-
-int ret = MyConnect(IP);
-if (ret == 1)
-{
-    std::string s(LastErrorString.begin(), LastErrorString.end());
-    strcpy_s(myString, length, s.c_str());
-    return 1;
-}
-
-//std::cout << "Max Gammer Test 2" << std::endl;
-std::string s("ok");
-strcpy_s(myString, length, s.c_str());
-return 0;
-}
-*/
-
-
-
-/*
-static void writeWrongVariable(UA_Server* server)
-{
-    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"the.answer");
-    //Write a string
-    UA_String myString = UA_STRING((char*)"test");
-    UA_Variant myVar;
-    UA_Variant_init(&myVar);
-    UA_Variant_setScalar(&myVar, &myString, &UA_TYPES[UA_TYPES_STRING]);
-    UA_StatusCode retval = UA_Server_writeValue(server, myIntegerNodeId, myVar);
-    printf("Writing a string returned statuscode %s\n", UA_StatusCode_name(retval));
-}
-*/
-
 
