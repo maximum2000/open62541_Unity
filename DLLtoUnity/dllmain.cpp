@@ -327,6 +327,8 @@ extern "C" __declspec(dllexport) int testServerRead()
     UA_Variant_init(&out);
     UA_Server_readValue(server, myIntegerNodeId, &out);
     int p = *(UA_Int32*)out.data;
+    /* Clean up */
+    UA_Variant_clear(&out);
     
     return p;
 }
@@ -340,6 +342,38 @@ extern "C" __declspec(dllexport) int testServerRead()
 
 
 
+extern "C" __declspec(dllexport) int testClient()
+{
+    UA_Client* client = UA_Client_new();
+    UA_ClientConfig_setDefault(UA_Client_getConfig(client));
+    UA_StatusCode retval = UA_Client_connect(client, "opc.tcp://localhost:4840");
+    if (retval != UA_STATUSCODE_GOOD) 
+    {
+        UA_Client_delete(client);
+        return (int)retval;
+    }
+
+    // Read the value attribute of the node. UA_Client_readValueAttribute is a
+    // wrapper for the raw read service available as UA_Client_Service_read. 
+    UA_Variant value; // Variants can hold scalar values and arrays of any type 
+    UA_Variant_init(&value);
+
+    // NodeId of the variable holding the current time 
+    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"the.answer");
+    retval = UA_Client_readValueAttribute(client, myIntegerNodeId, &value);
+
+    int p = 0;
+    if (retval == UA_STATUSCODE_GOOD && UA_Variant_hasScalarType(&value, &UA_TYPES[UA_TYPES_INT32])) 
+    {
+        p = *(UA_Int32*)value.data;
+    }
+
+    // Clean up 
+    UA_Variant_clear(&value);
+    UA_Client_delete(client); // Disconnects the client internally 
+    return p;
+}
+
 
 
 
@@ -347,6 +381,7 @@ extern "C" __declspec(dllexport) int testServerRead()
 //-------------------------------------------------------------------------------------------------------------
 
 //nothrow
+/*
 extern "C" __declspec(dllexport) int testClient(int a, int b)
 {
     UA_Client* client = UA_Client_new();
@@ -363,6 +398,7 @@ extern "C" __declspec(dllexport) int testClient(int a, int b)
     UA_Variant_init(&value);
 
     // NodeId of the variable holding the current time 
+    //UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"the.answer");
     const UA_NodeId nodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_SERVER_SERVERSTATUS_CURRENTTIME);
     retval = UA_Client_readValueAttribute(client, nodeId, &value);
 
@@ -380,7 +416,7 @@ extern "C" __declspec(dllexport) int testClient(int a, int b)
     return EXIT_SUCCESS;
 }
 
-
+*/
 
 
 

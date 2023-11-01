@@ -51,6 +51,9 @@ public class OPCUA_SERVER_DLL : MonoBehaviour
     [DllImport("DLL1")]
     public static extern int testServerWrite(int a);
 
+    [DllImport("DLL1")]
+    public static extern int testClient();
+
 
     //callback для Debug'а
     private delegate void DebugCallback(IntPtr message, int color, int size);
@@ -97,11 +100,14 @@ public class OPCUA_SERVER_DLL : MonoBehaviour
 
     }
 
+    public void  testExampleClientFunction()
+    {
+        Debug.Log("testClient=" + testClient().ToString());
+    }
 
 
 
-
-void OnDestroy()
+    void OnDestroy()
     {
         RegisterDebugCallback(null);
         
