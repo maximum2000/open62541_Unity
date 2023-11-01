@@ -1,59 +1,4 @@
-﻿/*
-tutorial_server_object - инстансы
-tutorial_server_variabletype - массивы
-tutorial_server_monitoreditems - подписка сервера
-
-tutorial_server_method_async
-tutorial_server_method - vtnjls / bynthfrwbb
-
-tutorial_server_events - Triggering an event
-
-tutorial_datatypes - строки / массивы / числа
-
-server_inheritance - примеры объектов
-..............................................................
-
-tutorial_client_firststeps - чтение переменной
-
-tutorial_client_events - подписка на мониторинг переменной и события
-
-client_subscription_loop - подписка
-
-client_connect
-client_connect_loop - автоподключение
-
-client_async - вызов метода
-
-client - чтение списка всего на сервере
-
-UA_StatusCode retval = UA_Client_connectUsername(client, "opc.tcp://localhost:4840", "paula", "paula123");
-
-pubsub_realtime - реалтайм
-
-
-UA_Server_readValue
-
-UA_Variant out;
-        UA_Variant_init(&out);
-        UA_Server_readValue(server, UA_NODEID_NUMERIC(2, 10002), &out);
-        UA_Point *p = (UA_Point *)out.data;
-        printf("point 2d x: %f y: %f \n", p->x, p->y);
-        retval = UA_Server_run(server, &running);
-
-UA_Variant value;
-        UA_Variant_init(&value);
-        if(UA_Server_readValue(server, UA_NODEID_NUMERIC(1, 1000 + (UA_UInt32) i), &value) != UA_STATUSCODE_GOOD) {
-            UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Failed to read publish value. Node number: %zu", i);
-            continue;
-        }
-
-
-
-
-
-*/
-
-#include <stdlib.h>
+﻿#include <stdlib.h>
 #include <string>
 
 
@@ -62,6 +7,8 @@ UA_Variant value;
 #include <open62541/client_highlevel.h>
 #include <open62541/plugin/log_stdout.h>
 #pragma comment(lib, "ws2_32.lib")
+//It follows the main server code, making use of the above definitions.
+//static volatile UA_Boolean running = true;
 
 
 //client
@@ -70,15 +17,31 @@ UA_Variant value;
 #include <open62541/server_config_default.h>
 #include <signal.h>
 
+//функции общие
+//1. SendLog - дебаг-вывод в unity
+
+//функции сервера:
+//1. int OPC_ServerCreate ()
+//2. int OPC_ServerUpdate ()
+//3. int OPC_ServerAddVariableDouble (description, displayName) // (char*)"the.answer", (char*)"the answer"
+//4. int OPC_ServerWriteValueDouble (description, value) //(char*)"the.answer", double
+//5. double OPC_ServerReadValueDouble (description) //(char*)"the.answer"
+//6. int OPC_ServerShutdown - выключение сервера
+
+//функции клиента:
+//1. int OPC_ClientConnect (url) // "opc.tcp://localhost:4840"
+//2. int OPC_ClientWriteValueDouble (description, value) //(char*)"the.answer", double
+//3. double OPC_ClientReadValueDouble (description) //(char*)"the.answer"
+//4. int OPC_ClientUpdate () - обновление клиента
+//5. int OPC_ClientDelete() - выключение клиента
 
 
+//глобальные переменные:
+UA_Server* server;
+UA_Boolean waitInternal = false;
 
 
-
-
-
-
-
+//---------------------------------DEBUG---------------------------------------
 // https://github.com/mkowalik92/UnityNativePluginPractice
 // Call this function from a Untiy script
 extern "C"
@@ -87,13 +50,10 @@ extern "C"
     static DebugCallback callbackFunction = nullptr;
     __declspec(dllexport) void RegisterDebugCallback(DebugCallback callback);
 }
-
 void RegisterDebugCallback(DebugCallback callback)
 {
     callbackFunction = callback;
 }
-
-
 //nothrow
 void SendLog(const std::wstring& str, const int& color)
 {
@@ -104,12 +64,259 @@ void SendLog(const std::wstring& str, const int& color)
         callbackFunction(tmsg, (int)color, (int)strlen(tmsg));
     }
 }
-
 //SendLog(L"debug DLL:connectionLost", 0);
+ 
+ 
+ 
+
+//---------------------------------SERVER---------------------------------------
+
+//1. int OPCserverCreate () - создание сервера OPC
+extern "C" __declspec(dllexport) int OPC_ServerCreate()
+{
+    SendLog(L"debug DLL:OPCserverCreate ...", 0);
+
+    server = UA_Server_new();
+    UA_ServerConfig_setDefault(UA_Server_getConfig(server));
+    UA_ServerConfig* config = UA_Server_getConfig(server);
+    config->verifyRequestTimestamp = UA_RULEHANDLING_ACCEPT;
+    #ifdef UA_ENABLE_WEBSOCKET_SERVER
+        UA_ServerConfig_addNetworkLayerWS(UA_Server_getConfig(server), 7681, 0, 0, NULL, NULL);
+    #endif
+    UA_StatusCode retval = UA_Server_run_startup(server);
+    if (retval != UA_STATUSCODE_GOOD)
+    {
+        SendLog(L"debug DLL:OPCserverCreate... false", 0);
+        UA_Server_delete(server);
+        retval = UA_Server_run_shutdown(server);
+        return retval == UA_STATUSCODE_GOOD ? EXIT_SUCCESS : EXIT_FAILURE;
+    }
+
+    SendLog(L"debug DLL:OPC_ServerCreate... ok", 0);
+    return 0;
+}
+
+//2. int OPC_ServerUpdate () - обновление сервера
+extern "C" __declspec(dllexport) int OPC_ServerUpdate()
+{
+    UA_UInt16 timeout = UA_Server_run_iterate(server, waitInternal);
+    return 0;
+}
+
+//3. int OPC_ServerAddVariableDouble (description, displayName) // (char*)"the.answer", (char*)"the answer"
+extern "C" __declspec(dllexport)  int OPC_ServerAddVariableDouble(char* descriptionString, char* displayNameString)
+{
+    /* Define the attribute of the myInteger variable node */
+    UA_VariableAttributes attr = UA_VariableAttributes_default;
+    UA_Double myDouble = 0;
+    UA_Variant_setScalar(&attr.value, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+    attr.description = UA_LOCALIZEDTEXT((char*)"en - US", descriptionString);   //(char*)"the.answer"
+    attr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", displayNameString);     //(char*)"the answer"
+    attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+    attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+    /* Add the variable node to the information model */
+    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, descriptionString);
+    UA_QualifiedName myDoubleName = UA_QUALIFIEDNAME(1, displayNameString);
+    UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
+    UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
+    UA_Server_addVariableNode(server, myIntegerNodeId, parentNodeId,parentReferenceNodeId, myDoubleName, UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, NULL);
+    return 0;
+}
+
+//4. int OPC_ServerWriteValueDouble (description, value) //(char*)"the.answer", double
+extern "C" __declspec(dllexport)  int OPC_ServerWriteValueDouble(char* descriptionString, double value)
+{
+    UA_NodeId myDoubleNodeId = UA_NODEID_STRING(1, descriptionString);
+
+    /* Write a different double value */
+    UA_Double myDouble = value;
+    UA_Variant myVar;
+    UA_Variant_init(&myVar);
+    UA_Variant_setScalar(&myVar, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+    UA_Server_writeValue(server, myDoubleNodeId, myVar);
+
+    /* Set the status code of the value to an error code. The function
+     * UA_Server_write provides access to the raw service. The above
+     * UA_Server_writeValue is syntactic sugar for writing a specific node
+     * attribute with the write service. */
+    UA_WriteValue wv;
+    UA_WriteValue_init(&wv);
+    wv.nodeId = myDoubleNodeId;
+    wv.attributeId = UA_ATTRIBUTEID_VALUE;
+    wv.value.status = UA_STATUSCODE_BADNOTCONNECTED;
+    wv.value.hasStatus = true;
+    UA_Server_write(server, &wv);
+
+    /* Reset the variable to a good statuscode with a value */
+    wv.value.hasStatus = false;
+    wv.value.value = myVar;
+    wv.value.hasValue = true;
+    UA_Server_write(server, &wv);
+
+    return 0;
+}
 
 
-//-----------------------------------------------------------------------------------------
 
+//5. double OPC_ServerReadValueDouble (description) //(char*)"the.answer"
+extern "C" __declspec(dllexport) double OPC_ServerReadValueDouble(char* descriptionString)
+{
+    UA_NodeId myDoubleNodeId = UA_NODEID_STRING(1, descriptionString);
+    UA_Variant out;
+    UA_Variant_init(&out);
+    UA_Server_readValue(server, myDoubleNodeId, &out);
+    double value = *(UA_Double*)out.data;
+    /* Clean up */
+    UA_Variant_clear(&out);
+    return value;
+}
+
+//6. int OPC_ServerShutdown
+extern "C" __declspec(dllexport) int OPC_ServerShutdown()
+{
+    SendLog(L"debug DLL:OPC_ServerShutdown... ", 0);
+    UA_Server_delete(server);
+    UA_StatusCode retval = UA_Server_run_shutdown(server);
+    return retval == UA_STATUSCODE_GOOD ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+
+
+//---------------------------------CLIENT---------------------------------------
+UA_Client* client;
+//1. int OPC_ClientConnect (url) // "opc.tcp://localhost:4840"
+extern "C" __declspec(dllexport) int OPC_ClientConnect(char* url)
+{
+    SendLog(L"debug DLL:OPC_ClientConnect... ", 0);
+    client = UA_Client_new();
+    UA_ClientConfig_setDefault(UA_Client_getConfig(client));
+
+    UA_StatusCode retval = UA_Client_connect(client, url); //"opc.tcp://localhost:4840"
+    if (retval != UA_STATUSCODE_GOOD)
+    {
+        UA_Client_delete(client);
+        SendLog(L"debug DLL:OPC_ClientConnect... false", 0);
+        return (int)retval;
+    }
+    SendLog(L"debug DLL:OPC_ClientConnect... ok", 0);
+    return 0;
+}
+
+//2. int OPC_ClientWriteValueDouble (description, value) //(char*)"the.answer", double
+extern "C" __declspec(dllexport) int OPC_ClientWriteValueDouble(char* description, double _value)
+{
+    UA_NodeId myDoubleNodeId = UA_NODEID_STRING(1, description);
+
+    //Write a different double value
+    UA_Double myDouble = _value;
+    //UA_Variant myVar;
+    //UA_Variant_init(&myVar);
+    //UA_Variant_setScalar(&myVar, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+    //UA_Client_writeValueAttribute(client, myDoubleNodeId, &myVar);
+
+    UA_Variant* myVariant = UA_Variant_new();
+    UA_Variant_setScalarCopy(myVariant, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+    UA_Client_writeValueAttribute(client, myDoubleNodeId, myVariant);
+    UA_Variant_delete(myVariant);
+
+
+    return 0;
+}
+
+//3. double OPC_ClientReadValueDouble (description) //(char*)"the.answer"
+extern "C" __declspec(dllexport) int OPC_ClientReadValueDouble(char* description)
+{
+    // Read the value attribute of the node. UA_Client_readValueAttribute is a
+    // wrapper for the raw read service available as UA_Client_Service_read. 
+    UA_Variant value; // Variants can hold scalar values and arrays of any type 
+    UA_Variant_init(&value);
+
+    // NodeId of the variable holding the current time 
+    UA_NodeId myDoubleNodeId = UA_NODEID_STRING(1, description); //(char*)"the.answer"
+    UA_StatusCode retval = UA_Client_readValueAttribute(client, myDoubleNodeId, &value);
+    double val = 0;
+    if (retval == UA_STATUSCODE_GOOD && UA_Variant_hasScalarType(&value, &UA_TYPES[UA_TYPES_DOUBLE]))
+    {
+        val = *(UA_Double*)value.data;
+        // Clean up 
+        UA_Variant_clear(&value);
+        return val;
+    }
+    // Clean up 
+    UA_Variant_clear(&value);
+    return -1;
+}
+
+//4. int OPC_ClientUpdate () - обновление клиента
+extern "C" __declspec(dllexport) int OPC_ClientUpdate()
+{
+    UA_UInt16 timeout = UA_Client_run_iterate(client, waitInternal);
+    return 0;
+}
+
+//5. int OPC_ClientDelete()
+extern "C" __declspec(dllexport) int OPC_ClientDelete()
+{
+    UA_Client_delete(client); // Disconnects the client internally 
+    return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//--------------OLD and TEST------------------------------------------------------------
+
+/*
+tutorial_server_object - инстансы
+tutorial_server_variabletype - массивы
+tutorial_server_monitoreditems - подписка сервера
+tutorial_server_method_async
+tutorial_server_method - vtnjls / bynthfrwbb
+tutorial_server_events - Triggering an event
+tutorial_datatypes - строки / массивы / числа
+server_inheritance - примеры объектов
+tutorial_client_firststeps - чтение переменной
+tutorial_client_events - подписка на мониторинг переменной и события
+client_subscription_loop - подписка
+client_connect
+client_connect_loop - автоподключение
+client_async - вызов метода
+client - чтение списка всего на сервере
+UA_StatusCode retval = UA_Client_connectUsername(client, "opc.tcp://localhost:4840", "paula", "paula123");
+pubsub_realtime - реалтайм
+*/
 
 
 static void addVariable(UA_Server* server)
@@ -118,14 +325,14 @@ static void addVariable(UA_Server* server)
     UA_VariableAttributes attr = UA_VariableAttributes_default;
     UA_Int32 myInteger = 42;
     UA_Variant_setScalar(&attr.value, &myInteger, &UA_TYPES[UA_TYPES_INT32]);
-    attr.description = UA_LOCALIZEDTEXT((char*)"en - US", (char*)"the answer");
-    attr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"the answer");
+    attr.description = UA_LOCALIZEDTEXT((char*)"en - US", (char*)"theanswer");
+    attr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"theanswer");
     attr.dataType = UA_TYPES[UA_TYPES_INT32].typeId;
     attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
 
     /* Add the variable node to the information model */
-    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"the.answer");
-    UA_QualifiedName myIntegerName = UA_QUALIFIEDNAME(1, (char*)"the answer");
+    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"AAA");
+    UA_QualifiedName myIntegerName = UA_QUALIFIEDNAME(1, (char*)"AAA");
     UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
     UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
     UA_Server_addVariableNode(server, myIntegerNodeId, parentNodeId,
@@ -137,24 +344,24 @@ static void addVariable(UA_Server* server)
 static void addMatrixVariable(UA_Server* server) 
 {
     UA_VariableAttributes attr = UA_VariableAttributes_default;
-    attr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)(char*)"Double Matrix");
+    attr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)(char*)"DoubleMatrix");
     attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
 
-    /* Set the variable value constraints */
+    //Set the variable value constraints 
     attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
     attr.valueRank = UA_VALUERANK_TWO_DIMENSIONS;
     UA_UInt32 arrayDims[2] = { 2,2 };
     attr.arrayDimensions = arrayDims;
     attr.arrayDimensionsSize = 2;
 
-    /* Set the value. The array dimensions need to be the same for the value. */
+    // Set the value. The array dimensions need to be the same for the value.
     UA_Double zero[4] = { 0.0, 0.0, 0.0, 0.0 };
     UA_Variant_setArray(&attr.value, zero, 4, &UA_TYPES[UA_TYPES_DOUBLE]);
     attr.value.arrayDimensions = arrayDims;
     attr.value.arrayDimensionsSize = 2;
 
     UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"double.matrix");
-    UA_QualifiedName myIntegerName = UA_QUALIFIEDNAME(1, (char*)"double matrix");
+    UA_QualifiedName myIntegerName = UA_QUALIFIEDNAME(1, (char*)"doublematrix");
     UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
     UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
     UA_Server_addVariableNode(server, myIntegerNodeId, parentNodeId,
@@ -163,14 +370,12 @@ static void addMatrixVariable(UA_Server* server)
         attr, NULL, NULL);
 }
 
-/**
- * Now we change the value with the write service. This uses the same service
- * implementation that can also be reached over the network by an OPC UA client.
- */
 
+//Now we change the value with the write service. This uses the same service
+//implementation that can also be reached over the network by an OPC UA client.
 static void writeVariable(UA_Server* server, int value) 
 {
-    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"the.answer");
+    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"AAA");
 
     /* Write a different integer value */
     UA_Int32 myInteger = value;
@@ -196,62 +401,17 @@ static void writeVariable(UA_Server* server, int value)
     wv.value.value = myVar;
     wv.value.hasValue = true;
     UA_Server_write(server, &wv);
-
-    //////////////////
-    //UA_Variant out;
-    //UA_Variant_init(&out);
-    //UA_Server_readValue(server, myIntegerNodeId, &out);
-    //UA_Int32* p = (UA_Int32*)out.data;
-    /////
 }
-
-/**
- * Note how we initially set the DataType attribute of the variable node to the
- * NodeId of the Int32 data type. This forbids writing values that are not an
- * Int32. The following code shows how this consistency check is performed for
- * every write.
- */
-
-static void writeWrongVariable(UA_Server* server) 
-{
-    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"the.answer");
-    
-
-    /* Write a string */
-    UA_String myString = UA_STRING((char*)"test");
-    UA_Variant myVar;
-    UA_Variant_init(&myVar);
-    UA_Variant_setScalar(&myVar, &myString, &UA_TYPES[UA_TYPES_STRING]);
-    UA_StatusCode retval = UA_Server_writeValue(server, myIntegerNodeId, myVar);
-    printf("Writing a string returned statuscode %s\n", UA_StatusCode_name(retval));
-}
-
-/** It follows the main server code, making use of the above definitions. */
-
-static volatile UA_Boolean running = true;
-//static void stopHandler(int sign) {
-//    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "received ctrl-c");
-//    running = false;
-//}
-
-
-
-
-UA_Server* server;
-UA_Boolean waitInternal = false;
 
 extern "C" __declspec(dllexport) int testServerCreate(int a, int b)
 {
-   // signal(SIGINT, stopHandler);
-   // signal(SIGTERM, stopHandler);
-    
-   SendLog(L"debug DLL:testServer", 0);
+    SendLog(L"debug DLL:testServer", 0);
 
-    //UA_Server* server = UA_Server_new();
     server = UA_Server_new();
     UA_ServerConfig_setDefault(UA_Server_getConfig(server));
     UA_ServerConfig* config = UA_Server_getConfig(server);
     config->verifyRequestTimestamp = UA_RULEHANDLING_ACCEPT;
+    //config->applicationDescription.applicationName
     #ifdef UA_ENABLE_WEBSOCKET_SERVER
         UA_ServerConfig_addNetworkLayerWS(UA_Server_getConfig(server), 7681, 0, 0, NULL, NULL);
     #endif
@@ -260,43 +420,17 @@ extern "C" __declspec(dllexport) int testServerCreate(int a, int b)
     addVariable(server);
     addMatrixVariable(server);
     writeVariable(server,54321);
-    writeWrongVariable(server);
-
-                    //UA_StatusCode retval = UA_Server_run(server, &running);
-                    //UA_Server_delete(server);
-                    //return retval == UA_STATUSCODE_GOOD ? EXIT_SUCCESS : EXIT_FAILURE;
-
-    /* Should the server networklayer block (with a timeout) until a message
-       arrives or should it return immediately? */
-    //UA_Boolean waitInternal = false;
-
 
     SendLog(L"debug DLL:UA_Server_run_startup", 0);
     UA_StatusCode retval = UA_Server_run_startup(server);
     if (retval != UA_STATUSCODE_GOOD)
+    {
         goto cleanup;
+    }
 
-    //!!!!
     return 0;
 
     /*
-    while (running) 
-    {
-        // timeout is the maximum possible delay (in millisec) until the next
-        //   _iterate call. Otherwise, the server might miss an internal timeout
-        //   or cannot react to messages with the promised responsiveness.
-            //   If multicast discovery server is enabled, the timeout does not not consider new input data (requests) on the mDNS socket.
-            //   It will be handled on the next call, which may be too late for requesting clients.
-            //  if needed, the select with timeout on the multicast socket server->mdnsSocket (see example in mdnsd library)
-        
-        UA_UInt16 timeout = UA_Server_run_iterate(server, waitInternal);
-
-        // Now we can use the max timeout to do something else. In this case, we just sleep. (select is used as a platform-independent sleep function.) 
-        struct timeval tv;
-        tv.tv_sec = 0;
-        tv.tv_usec = timeout * 1000;
-        select(0, NULL, NULL, NULL, &tv);
-    }
     retval = UA_Server_run_shutdown(server);
     */
 
@@ -322,7 +456,7 @@ extern "C" __declspec(dllexport) int testServerWrite(int a)
 
 extern "C" __declspec(dllexport) int testServerRead()
 {
-    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"the.answer");
+    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"AAA");
     UA_Variant out;
     UA_Variant_init(&out);
     UA_Server_readValue(server, myIntegerNodeId, &out);
@@ -338,7 +472,7 @@ extern "C" __declspec(dllexport) int testServerRead()
 
 
 
-
+//-------------------------------------------------------------------------------------------------------------
 
 
 
@@ -359,8 +493,10 @@ extern "C" __declspec(dllexport) int testClient()
     UA_Variant_init(&value);
 
     // NodeId of the variable holding the current time 
-    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"the.answer");
+    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"AAA");
     retval = UA_Client_readValueAttribute(client, myIntegerNodeId, &value);
+
+    
 
     int p = 0;
     if (retval == UA_STATUSCODE_GOOD && UA_Variant_hasScalarType(&value, &UA_TYPES[UA_TYPES_INT32])) 
@@ -381,104 +517,9 @@ extern "C" __declspec(dllexport) int testClient()
 //-------------------------------------------------------------------------------------------------------------
 
 //nothrow
-/*
-extern "C" __declspec(dllexport) int testClient(int a, int b)
-{
-    UA_Client* client = UA_Client_new();
-    UA_ClientConfig_setDefault(UA_Client_getConfig(client));
-    UA_StatusCode retval = UA_Client_connect(client, "opc.tcp://localhost:4840");
-    if (retval != UA_STATUSCODE_GOOD) {
-        UA_Client_delete(client);
-        return (int)retval;
-    }
-
-    // Read the value attribute of the node. UA_Client_readValueAttribute is a
-    // wrapper for the raw read service available as UA_Client_Service_read. 
-    UA_Variant value; // Variants can hold scalar values and arrays of any type 
-    UA_Variant_init(&value);
-
-    // NodeId of the variable holding the current time 
-    //UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"the.answer");
-    const UA_NodeId nodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_SERVER_SERVERSTATUS_CURRENTTIME);
-    retval = UA_Client_readValueAttribute(client, nodeId, &value);
-
-    if (retval == UA_STATUSCODE_GOOD &&
-        UA_Variant_hasScalarType(&value, &UA_TYPES[UA_TYPES_DATETIME])) {
-        UA_DateTime raw_date = *(UA_DateTime*)value.data;
-        UA_DateTimeStruct dts = UA_DateTime_toStruct(raw_date);
-        UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "date is: %u-%u-%u %u:%u:%u.%03u\n",
-            dts.day, dts.month, dts.year, dts.hour, dts.min, dts.sec, dts.milliSec);
-    }
-
-    // Clean up 
-    UA_Variant_clear(&value);
-    UA_Client_delete(client); // Disconnects the client internally 
-    return EXIT_SUCCESS;
-}
-
-*/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/* This work is licensed under a Creative Commons CCZero 1.0 Universal License.
- * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. */
-
- /**
-  * Building a Simple Client
-  * ------------------------
-  * You should already have a basic server from the previous tutorials. open62541
-  * provides both a server- and clientside API, so creating a client is as easy as
-  * creating a server. Copy the following into a file `myClient.c`: */
 
 /*
-//подключиться к серверу федерации
-int MyConnect(std::wstring IP)
-{
-    IP = L"";
-    LastErrorString = L"";
-    FederationName = L"";
-    FederateName = L"";
 
-    try
-    {
-        ambassador->connect(L"rti://127.0.0.1"); //thread:// L"rti://127.0.0.1"
-    }
-    catch (const rti1516e::Exception& e)
-    {
-        LastErrorString = e.what();
-        std::wcout << L"rti1516e::Exception: \"" << LastErrorString << L"\"" << std::endl;
-        return 1;
-    }
-    catch (...)
-    {
-        LastErrorString = L"Unknown Exception!";
-        std::wcout << LastErrorString << std::endl;
-        return 1;
-    }
-    return 0;
-}
 //первичное подключение к серверу (RTInode)
 int Connect(char* myString, int length)
 {
@@ -508,5 +549,19 @@ return 0;
 */
 
 
+
+/*
+static void writeWrongVariable(UA_Server* server)
+{
+    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"the.answer");
+    //Write a string
+    UA_String myString = UA_STRING((char*)"test");
+    UA_Variant myVar;
+    UA_Variant_init(&myVar);
+    UA_Variant_setScalar(&myVar, &myString, &UA_TYPES[UA_TYPES_STRING]);
+    UA_StatusCode retval = UA_Server_writeValue(server, myIntegerNodeId, myVar);
+    printf("Writing a string returned statuscode %s\n", UA_StatusCode_name(retval));
+}
+*/
 
 
