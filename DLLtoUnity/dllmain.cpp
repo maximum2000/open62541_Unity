@@ -1,4 +1,14 @@
-﻿#include <stdlib.h>
+﻿/***************************************************************************
+dllmain.cpp  -  OPC UA for Unity C#
+used in company projects https://Lcontent.ru
+based on OpenRTI
+-------------------
+begin                : 01 ноября 2023
+copyright            : (C) 2023 by Гаммер Максим Дмитриевич (maximum2000)
+email                : Maxim.Gammer@yandex.ru
+***************************************************************************/
+
+#include <stdlib.h>
 #include <string>
 
 
@@ -6,7 +16,7 @@
 #include <open62541/client_config_default.h>
 #include <open62541/client_highlevel.h>
 #include <open62541/plugin/log_stdout.h>
-#pragma comment(lib, "ws2_32.lib")
+//#pragma comment(lib, "ws2_32.lib")
 //It follows the main server code, making use of the above definitions.
 //static volatile UA_Boolean running = true;
 
