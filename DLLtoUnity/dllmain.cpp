@@ -29,6 +29,28 @@ client - чтение списка всего на сервере
 UA_StatusCode retval = UA_Client_connectUsername(client, "opc.tcp://localhost:4840", "paula", "paula123");
 
 pubsub_realtime - реалтайм
+
+
+UA_Server_readValue
+
+UA_Variant out;
+        UA_Variant_init(&out);
+        UA_Server_readValue(server, UA_NODEID_NUMERIC(2, 10002), &out);
+        UA_Point *p = (UA_Point *)out.data;
+        printf("point 2d x: %f y: %f \n", p->x, p->y);
+        retval = UA_Server_run(server, &running);
+
+UA_Variant value;
+        UA_Variant_init(&value);
+        if(UA_Server_readValue(server, UA_NODEID_NUMERIC(1, 1000 + (UA_UInt32) i), &value) != UA_STATUSCODE_GOOD) {
+            UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Failed to read publish value. Node number: %zu", i);
+            continue;
+        }
+
+
+
+
+
 */
 
 #include <stdlib.h>
@@ -174,6 +196,13 @@ static void writeVariable(UA_Server* server, int value)
     wv.value.value = myVar;
     wv.value.hasValue = true;
     UA_Server_write(server, &wv);
+
+    //////////////////
+    //UA_Variant out;
+    //UA_Variant_init(&out);
+    //UA_Server_readValue(server, myIntegerNodeId, &out);
+    //UA_Int32* p = (UA_Int32*)out.data;
+    /////
 }
 
 /**
@@ -186,6 +215,7 @@ static void writeVariable(UA_Server* server, int value)
 static void writeWrongVariable(UA_Server* server) 
 {
     UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"the.answer");
+    
 
     /* Write a string */
     UA_String myString = UA_STRING((char*)"test");
@@ -275,14 +305,31 @@ cleanup:
     return retval == UA_STATUSCODE_GOOD ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
-extern "C" __declspec(dllexport) int testServerUpdate(int a, int b)
+extern "C" __declspec(dllexport) int testServerUpdate()
 {
-    writeVariable(server, a);
+    //writeVariable(server, a);
     UA_UInt16 timeout = UA_Server_run_iterate(server, waitInternal);
     return 0;
 }
 
 
+
+extern "C" __declspec(dllexport) int testServerWrite(int a)
+{
+    writeVariable(server, a);
+    return 0;
+}
+
+extern "C" __declspec(dllexport) int testServerRead()
+{
+    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"the.answer");
+    UA_Variant out;
+    UA_Variant_init(&out);
+    UA_Server_readValue(server, myIntegerNodeId, &out);
+    int p = *(UA_Int32*)out.data;
+    
+    return p;
+}
 
 
 

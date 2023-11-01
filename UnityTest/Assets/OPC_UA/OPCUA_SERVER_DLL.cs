@@ -33,8 +33,8 @@ public class OPCUA_SERVER_DLL : MonoBehaviour
 
    //имя класса для создаваемого объекта
    public TMP_InputField IP;
-
-   
+    public TMP_InputField ReadIntTest;
+    public Toggle writeToggle;
 
 
     //
@@ -43,9 +43,13 @@ public class OPCUA_SERVER_DLL : MonoBehaviour
     //public static extern int GetObjectClassHandle(StringBuilder className, int length);
 
     [DllImport("DLL1")]
-    public static extern int testServerUpdate(int a, int b);
-    
+    public static extern int testServerUpdate();
 
+    [DllImport("DLL1")]
+    public static extern int testServerRead();
+
+    [DllImport("DLL1")]
+    public static extern int testServerWrite(int a);
 
 
     //callback для Debug'а
@@ -97,8 +101,6 @@ public class OPCUA_SERVER_DLL : MonoBehaviour
 
 
 
-
-
 void OnDestroy()
     {
         RegisterDebugCallback(null);
@@ -131,6 +133,16 @@ void OnDestroy()
     // Update is called once per frame
     void Update()
     {
+        if (mutexObj == null) return;
+
+        mutexObj.WaitOne();
+        ReadIntTest.text = zzz.ToString();
+        if (writeToggle.isOn == false)
+        {
+            slider.value = zzz;
+        }
+        mutexObj.ReleaseMutex();
+
         return;
 
         GetReadedBytes();
@@ -147,7 +159,7 @@ void OnDestroy()
             
     }
 
-
+    int zzz = 0;
     private void Thread_loop()
     {
         while (stop==false)
@@ -155,9 +167,20 @@ void OnDestroy()
             //evokeCallback(0.1);
             //getObjectClassHandle();
 
-            int a = (int)slider.value;
-            int b = 1;
-            testServerUpdate(a,b);
+
+
+            if (writeToggle.isOn == true)
+            {
+                int a = (int)slider.value;
+                testServerWrite(a);
+            }
+
+            testServerUpdate();
+
+
+            mutexObj.WaitOne();
+            zzz = testServerRead();
+            mutexObj.ReleaseMutex();
         }
     }
 
