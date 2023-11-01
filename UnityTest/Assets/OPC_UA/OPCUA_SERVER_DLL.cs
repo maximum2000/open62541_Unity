@@ -165,9 +165,8 @@ public class OPCUA_SERVER_DLL : MonoBehaviour
 
     public void testExampleClientFunction()
     {
-        StringBuilder varzname = new StringBuilder("AAA", 100);
-
-        Debug.Log("testClient=" + testClient(varzname).ToString());
+        //StringBuilder varzname = new StringBuilder("AAA", 100);
+        //Debug.Log("testClient=" + testClient(varzname).ToString());
 
         //1. int OPC_ClientConnect (url) // "opc.tcp://localhost:4840"
         StringBuilder addr = new StringBuilder("opc.tcp://localhost:4840", 100);
@@ -192,10 +191,11 @@ public class OPCUA_SERVER_DLL : MonoBehaviour
 
 
         //Debug.Log("OPC_ClientUpdate=" + ret4.ToString());
-        
+
         //5. int OPC_ClientDelete() - выключение клиента
-        int ret5 = OPC_ClientDelete();
-        Debug.Log("OPC_ClientDelete=" + ret5.ToString());
+        //int ret5 = OPC_ClientDelete();
+        //Debug.Log("OPC_ClientDelete=" + ret5.ToString());
+
     }
 
 
@@ -253,7 +253,12 @@ public class OPCUA_SERVER_DLL : MonoBehaviour
         if (writeToggle.isOn == false)
         {
             slider.value = (float)zzz;
+            
         }
+
+       
+        
+
         mutexObj.ReleaseMutex();
 
         return;
@@ -273,6 +278,7 @@ public class OPCUA_SERVER_DLL : MonoBehaviour
     }
 
     double zzz = 0;
+   
     private void Thread_loop()
     {
         while (stop==false)
@@ -290,10 +296,16 @@ public class OPCUA_SERVER_DLL : MonoBehaviour
             //testServerUpdate();
             OPC_ServerUpdate();
 
+            
+
             mutexObj.WaitOne();
             //zzz = testServerRead();
             StringBuilder var2name = new StringBuilder("AAA", 100);
             zzz = OPC_ServerReadValueDouble(var2name);
+
+            
+
+
             mutexObj.ReleaseMutex();
         }
     }

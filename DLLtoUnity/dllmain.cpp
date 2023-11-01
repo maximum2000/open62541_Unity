@@ -225,7 +225,7 @@ extern "C" __declspec(dllexport) int OPC_ClientWriteValueDouble(char* descriptio
 }
 
 //3. double OPC_ClientReadValueDouble (description) //(char*)"the.answer"
-extern "C" __declspec(dllexport) int OPC_ClientReadValueDouble(char* description)
+extern "C" __declspec(dllexport) double OPC_ClientReadValueDouble(char* description)
 {
     // Read the value attribute of the node. UA_Client_readValueAttribute is a
     // wrapper for the raw read service available as UA_Client_Service_read. 
