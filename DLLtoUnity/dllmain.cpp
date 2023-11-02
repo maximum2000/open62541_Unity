@@ -47,6 +47,26 @@ email                : Maxim.Gammer@yandex.ru
 //5. int OPC_ClientDelete() - выключение клиента
 
 
+//сделать:
+//tutorial_server_object - объектыи инстансы
+//tutorial_server_monitoreditems - подписка на изменение сервера (callback)
+    //tutorial_client_events - подписка на мониторинг переменной и события
+    //client_subscription_loop - подписка
+//tutorial_server_method (tutorial_server_method_async) - методы 
+    //client_async - вызов метода
+//tutorial_server_events - триггеры и события
+//client_connect_loop - автоподключение
+
+//интересно:
+//UA_StatusCode retval = UA_Client_connectUsername(client, "opc.tcp://localhost:4840", "paula", "paula123");
+//pubsub_realtime - реалтайм
+//tutorial_datatypes - строки / массивы / числа
+//server_inheritance - примеры объектов
+//tutorial_server_variabletype - массивы
+//client - чтение списка всего на сервере
+
+
+
 //глобальные переменные:
 UA_Server* server;
 UA_Boolean waitInternal = false;
@@ -310,25 +330,7 @@ extern "C" __declspec(dllexport) int OPC_ClientDelete()
 
 //--------------OLD and TEST------------------------------------------------------------
 
-/*
-tutorial_server_object - инстансы
-tutorial_server_variabletype - массивы
-tutorial_server_monitoreditems - подписка сервера
-tutorial_server_method_async
-tutorial_server_method - vtnjls / bynthfrwbb
-tutorial_server_events - Triggering an event
-tutorial_datatypes - строки / массивы / числа
-server_inheritance - примеры объектов
-tutorial_client_firststeps - чтение переменной
-tutorial_client_events - подписка на мониторинг переменной и события
-client_subscription_loop - подписка
-client_connect
-client_connect_loop - автоподключение
-client_async - вызов метода
-client - чтение списка всего на сервере
-UA_StatusCode retval = UA_Client_connectUsername(client, "opc.tcp://localhost:4840", "paula", "paula123");
-pubsub_realtime - реалтайм
-*/
+
 
 
 static void addVariable(UA_Server* server)
