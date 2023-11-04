@@ -146,7 +146,26 @@ void SendMethodCall(const std::wstring& str, const unsigned int& nodeid)
 }
 //SendMethodCall(L"Hello word", 62541);
 
-
+// Call this function from a Untiy script
+extern "C"
+{
+    typedef void(*ValueChangeCallback)(unsigned int monID, double value);
+    static ValueChangeCallback callbackValueChangeFunction = nullptr;
+    __declspec(dllexport) void RegisterValueChangeCallback(ValueChangeCallback callback);
+}
+void RegisterValueChangeCallback(ValueChangeCallback callback)
+{
+    callbackValueChangeFunction = callback;
+}
+//nothrow
+void SendValueChange(const unsigned int& monID, const double& value)
+{
+    if (callbackValueChangeFunction != nullptr)
+    {
+        callbackValueChangeFunction((unsigned int)monID, (double)value);
+    }
+}
+//SendValueChange(1000, 3.141516);
 
 
  
@@ -458,183 +477,88 @@ extern "C" __declspec(dllexport) int OPC_ClientCallMethod(unsigned int NodeId, c
 
 
 
-
-
-
-
-
-//---------------------в разработке-------------------------------
-//tutorial_client_events - подписка на мониторинг переменной и события                                      +
-/* Create a subscription */
-
+//подписка на мониторинг переменной и события
+//tutorial_client_events
 #ifdef UA_ENABLE_SUBSCRIPTIONS
-
-static void handler_events(UA_Client* client, UA_UInt32 subId, void* subContext,  UA_UInt32 monId, void* monContext, size_t nEventFields, UA_Variant* eventFields) 
+static void handler_TheAnswerChanged(UA_Client* client, UA_UInt32 subId, void* subContext, UA_UInt32 monId, void* monContext, UA_DataValue* value) 
 {
-    //UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Notification");
-    SendLog(L"Notification", 0);
+    SendLog(L"Monitoring .. handler_TheAnswerChanged", 0);
 
-    /* The context should point to the monId on the stack */
-    UA_assert(*(UA_UInt32*)monContext == monId);
-
-    for (size_t i = 0; i < nEventFields; ++i)
+    if (value->hasValue == true)
     {
-        if (UA_Variant_hasScalarType(&eventFields[i], &UA_TYPES[UA_TYPES_UINT16])) 
+        if (UA_Variant_hasScalarType(&value->value, &UA_TYPES[UA_TYPES_DOUBLE]))
         {
-            UA_UInt16 severity = *(UA_UInt16*)eventFields[i].data;
-            //UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Severity: %u", severity);
+            UA_Double severity = *(UA_Double*)value->value.data;
+            SendValueChange(monId, severity);
+            SendLog(L"Notification1 double", 0);
         }
-        else if (UA_Variant_hasScalarType(&eventFields[i], &UA_TYPES[UA_TYPES_LOCALIZEDTEXT])) 
+        else if (UA_Variant_hasScalarType(&value->value, &UA_TYPES[UA_TYPES_LOCALIZEDTEXT]))
         {
-            UA_LocalizedText* lt = (UA_LocalizedText*)eventFields[i].data;
-            //UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND,"Message: '%.*s'", (int)lt->text.length, lt->text.data);
-        }
-        else 
-        {
-            #ifdef UA_ENABLE_TYPEDESCRIPTION
-                //UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Don't know how to handle type: '%s'", eventFields[i].type->typeName);
-            #else
-                //UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Don't know how to handle type, enable UA_ENABLE_TYPEDESCRIPTION for typename");
-            #endif
+            UA_LocalizedText* lt = (UA_LocalizedText*)value->value.data;
+            SendLog(L"Notification1 text", 0);
         }
     }
-}
 
-const size_t nSelectClauses = 2;
-
-static UA_SimpleAttributeOperand*  setupSelectClauses(void) 
-{
-    UA_SimpleAttributeOperand* selectClauses = (UA_SimpleAttributeOperand*) UA_Array_new(nSelectClauses, &UA_TYPES[UA_TYPES_SIMPLEATTRIBUTEOPERAND]);
-    if (!selectClauses)return NULL;
-
-    for (size_t i = 0; i < nSelectClauses; ++i) 
-    {
-        UA_SimpleAttributeOperand_init(&selectClauses[i]);
-    }
-
-    selectClauses[0].typeDefinitionId = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEEVENTTYPE);
-    selectClauses[0].browsePathSize = 1;
-    selectClauses[0].browsePath = (UA_QualifiedName*)  UA_Array_new(selectClauses[0].browsePathSize, &UA_TYPES[UA_TYPES_QUALIFIEDNAME]);
-    if (!selectClauses[0].browsePath) 
-    {
-        UA_SimpleAttributeOperand_delete(selectClauses);
-        return NULL;
-    }
-    selectClauses[0].attributeId = UA_ATTRIBUTEID_VALUE;
-    selectClauses[0].browsePath[0] = UA_QUALIFIEDNAME_ALLOC(0, "Message");
-
-    selectClauses[1].typeDefinitionId = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEEVENTTYPE);
-    selectClauses[1].browsePathSize = 1;
-    selectClauses[1].browsePath = (UA_QualifiedName*) UA_Array_new(selectClauses[1].browsePathSize, &UA_TYPES[UA_TYPES_QUALIFIEDNAME]);
-    if (!selectClauses[1].browsePath) 
-    {
-        UA_SimpleAttributeOperand_delete(selectClauses);
-        return NULL;
-    }
-    selectClauses[1].attributeId = UA_ATTRIBUTEID_VALUE;
-    selectClauses[1].browsePath[0] = UA_QUALIFIEDNAME_ALLOC(0, "Severity");
-
-    return selectClauses;
 }
 #endif
 
-extern "C" __declspec(dllexport) int OPC_ClientSubscription()
+extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* varname, double interval)
 {
-    /*
-    #ifdef UA_ENABLE_SUBSCRIPTIONS
-    static void
-    handler_TheAnswerChanged(UA_Client *client, UA_UInt32 subId, void *subContext,
-                                UA_UInt32 monId, void *monContext, UA_DataValue *value) {
-        printf("The Answer has changed!\n");
-    }
-    #endif
-    // Create a subscription 
+    SendLog(L"OPC_ClientSubscription", 0);
+
+    // Create a subscription
     UA_CreateSubscriptionRequest request = UA_CreateSubscriptionRequest_default();
-    UA_CreateSubscriptionResponse response = UA_Client_Subscriptions_create(client, request,
-        NULL, NULL, NULL);
+    request.requestedPublishingInterval = interval;
+    UA_CreateSubscriptionResponse response = UA_Client_Subscriptions_create(client, request, NULL, NULL, NULL);
 
     UA_UInt32 subId = response.subscriptionId;
     if (response.responseHeader.serviceResult == UA_STATUSCODE_GOOD)
-        printf("Create subscription succeeded, id %u\n", subId);
+    {
+        //printf("Create subscription succeeded, id %u\n", subId);
+        SendLog(L"Create subscription succeeded", 0);
+    }
 
-    UA_MonitoredItemCreateRequest monRequest =
-        UA_MonitoredItemCreateRequest_default(UA_NODEID_STRING(1, "the.answer"));
+    UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(UA_NODEID_STRING(1, varname));
 
-    UA_MonitoredItemCreateResult monResponse =
-        UA_Client_MonitoredItems_createDataChange(client, response.subscriptionId,
-            UA_TIMESTAMPSTORETURN_BOTH,
-            monRequest, NULL, handler_TheAnswerChanged, NULL);
+    UA_MonitoredItemCreateResult monResponse = UA_Client_MonitoredItems_createDataChange(client, response.subscriptionId, UA_TIMESTAMPSTORETURN_BOTH,monRequest, NULL, handler_TheAnswerChanged, NULL);
+    
     if (monResponse.statusCode == UA_STATUSCODE_GOOD)
-        printf("Monitoring 'the.answer', id %u\n", monResponse.monitoredItemId);
+    {
+        SendLog(L"Monitoring .. ok", 0);
+        //printf("Monitoring 'the.answer', id %u\n", monResponse.monitoredItemId);
+    }
+    else
+    {
+        SendLog(L"Monitoring .. false", 0);
+    }
 
 
-    // The first publish request should return the initial value of the variable 
+    // The first publish request should return the initial value of the variable
     UA_Client_run_iterate(client, 1000);
-    */
 
-    SendLog(L"Create subscription succeeded", 0);
+    UA_UInt32 monId = monResponse.monitoredItemId;
+    return monId;
 
-#ifdef UA_ENABLE_SUBSCRIPTIONS
-    UA_CreateSubscriptionRequest request = UA_CreateSubscriptionRequest_default();
-    UA_CreateSubscriptionResponse response = UA_Client_Subscriptions_create(client, request,  NULL, NULL, NULL);
-    if (response.responseHeader.serviceResult != UA_STATUSCODE_GOOD) 
-    {
-        return EXIT_FAILURE;
-    }
-    UA_UInt32 subId = response.subscriptionId;
-    //UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Create subscription succeeded, id %u", subId);
-    SendLog(L"Create subscription succeeded", 0);
-
-    /* Add a MonitoredItem */
-    //UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(UA_NODEID_STRING(1, "the.answer"));
-
-    UA_MonitoredItemCreateRequest item;
-    UA_MonitoredItemCreateRequest_init(&item);
-    item.itemToMonitor.nodeId = UA_NODEID_NUMERIC(0, 2253); // UA_NODEID_STRING(1, (char*)"the.answer"); // UA_NODEID_NUMERIC(0, 2253); // Root->Objects->Server
-    item.itemToMonitor.attributeId = UA_ATTRIBUTEID_EVENTNOTIFIER;
-    item.monitoringMode = UA_MONITORINGMODE_REPORTING;
-
-    UA_EventFilter filter;
-    UA_EventFilter_init(&filter);
-    filter.selectClauses = setupSelectClauses();
-    filter.selectClausesSize = nSelectClauses;
-
-    item.requestedParameters.filter.encoding = UA_EXTENSIONOBJECT_DECODED;
-    item.requestedParameters.filter.content.decoded.data = &filter;
-    item.requestedParameters.filter.content.decoded.type = &UA_TYPES[UA_TYPES_EVENTFILTER];
-
-    UA_UInt32 monId = 0;
-
-    UA_MonitoredItemCreateResult result =  UA_Client_MonitoredItems_createEvent(client, subId, UA_TIMESTAMPSTORETURN_BOTH, item, &monId, handler_events, NULL);
-
-    if (result.statusCode != UA_STATUSCODE_GOOD) 
-    {
-        //UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Could not add the MonitoredItem with" ); //UA_StatusCode_name(retval)
-        SendLog(L"Could not add the MonitoredItem", 0);
-        goto cleanup;
-    }
-    else 
-    {
-        //UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Monitoring 'Root->Objects->Server', id %u", response.subscriptionId);
-        SendLog(L"Monitoring Root->Objects->Server", 0);
-    }
-
-    monId = result.monitoredItemId;
-
-
-
-
-    /* Delete the subscription */
-cleanup:
     //UA_MonitoredItemCreateResult_clear(&result);
     //UA_Client_Subscriptions_deleteSingle(client, response.subscriptionId);
     //UA_Array_delete(filter.selectClauses, nSelectClauses, &UA_TYPES[UA_TYPES_SIMPLEATTRIBUTEOPERAND]);
-
-#endif
-    return 0;
 }
 
-//---------------------в разработке-------------------------------
+//----------------------------------------подписка на мониторинг переменной и события------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 //--------------------В РАЗРАБОТКЕ--------------------------------
