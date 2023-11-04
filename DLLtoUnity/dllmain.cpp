@@ -10,7 +10,7 @@ email                : Maxim.Gammer@yandex.ru
 
 #include <stdlib.h>
 #include <string>
-
+#include <sstream>
 
 //server
 #include <open62541/client_config_default.h>
@@ -122,7 +122,33 @@ void SendLog(const std::wstring& str, const int& color)
     }
 }
 //SendLog(L"debug DLL:connectionLost", 0);
- 
+
+// Call this function from a Untiy script
+extern "C"
+{
+    typedef void(*MethodCallCallback)(const char* message, unsigned int nodeid, int size);
+    static MethodCallCallback callbackMethodCallFunction = nullptr;
+    __declspec(dllexport) void RegisterMethodCallCallback(MethodCallCallback callback);
+}
+void RegisterMethodCallCallback(MethodCallCallback callback)
+{
+    callbackMethodCallFunction = callback;
+}
+//nothrow
+void SendMethodCall(const std::wstring& str, const unsigned int& nodeid)
+{
+    std::string s(str.begin(), str.end());
+    const char* tmsg = s.c_str();
+    if (callbackMethodCallFunction != nullptr)
+    {
+        callbackMethodCallFunction(tmsg, (unsigned int)nodeid, (int)strlen(tmsg));
+    }
+}
+//SendMethodCall(L"Hello word", 62541);
+
+
+
+
  
  
 
@@ -323,6 +349,112 @@ extern "C" __declspec(dllexport) int OPC_ClientDelete()
 
 
 
+
+//-----------------------------------Регистрация метода из сервера и обработчик вызова метода--------------------------------
+//tutorial_server_method.c
+static UA_StatusCode helloWorldMethodCallback(UA_Server* server,
+    const UA_NodeId* sessionId, void* sessionHandle,
+    const UA_NodeId* methodId, void* methodContext,
+    const UA_NodeId* objectId, void* objectContext,
+    size_t inputSize, const UA_Variant* input,
+    size_t outputSize, UA_Variant* output)
+{
+    UA_String* inputStr = (UA_String*)input->data;
+    UA_String tmp = UA_STRING_ALLOC("Hello ");
+    if (inputStr->length > 0) {
+        tmp.data = (UA_Byte*)UA_realloc(tmp.data, tmp.length + inputStr->length);
+        memcpy(&tmp.data[tmp.length], inputStr->data, inputStr->length);
+        tmp.length += inputStr->length;
+    }
+    UA_Variant_setScalarCopy(output, &tmp, &UA_TYPES[UA_TYPES_STRING]);
+    UA_String_clear(&tmp);
+    //UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Hello World was called");
+    SendLog(L"debug DLL:Hello World was called", 0);
+
+
+    char* convert = (char*)UA_malloc(sizeof(char) * inputStr->length + 1);
+    memcpy(convert, inputStr->data, inputStr->length);
+    convert[inputStr->length] = '\0';
+
+    std::wstringstream cls;
+    cls << convert;
+    std::wstring name = cls.str();
+
+    SendMethodCall(name, methodId->identifier.numeric);
+
+
+    return UA_STATUSCODE_GOOD;
+}
+
+static void addHelloWorldMethod(UA_Server* server, unsigned int nodeID, char* name, char* displayName, char* description)
+{
+    UA_Argument inputArgument;
+    UA_Argument_init(&inputArgument);
+    inputArgument.description = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"A String");
+    inputArgument.name = UA_STRING((char*)"MyInput");
+    inputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+    inputArgument.valueRank = UA_VALUERANK_SCALAR;
+
+    UA_Argument outputArgument;
+    UA_Argument_init(&outputArgument);
+    outputArgument.description = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"A String");
+    outputArgument.name = UA_STRING((char*)"MyOutput");
+    outputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+    outputArgument.valueRank = UA_VALUERANK_SCALAR;
+
+    UA_MethodAttributes helloAttr = UA_MethodAttributes_default;
+    helloAttr.description = UA_LOCALIZEDTEXT((char*)"en-US", description);  //4 (char*)"Say `Hello World`"
+    helloAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", displayName);  //3 (char*)"Hello World"
+    helloAttr.executable = true;
+    helloAttr.userExecutable = true;
+    UA_Server_addMethodNode(server, UA_NODEID_NUMERIC(1, nodeID),           //1 unsigned int //62541
+        UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+        UA_QUALIFIEDNAME(1, name),                      //2      (char*)"hello world"
+        helloAttr, &helloWorldMethodCallback,
+        1, &inputArgument, 1, &outputArgument, NULL, NULL);
+}
+
+extern "C" __declspec(dllexport) int OPC_ServerCreateMethod(unsigned int nodeID, char* name, char* displayName, char* description)
+{
+    addHelloWorldMethod(server, nodeID, name, displayName, description);
+    return 0;
+}
+//-----------------------------------Регистрация метода и обработчик вызова метода--------------------------------
+
+
+
+
+//-----------------------------------Вызов метода  из клиента-----------------------------------------------------
+extern "C" __declspec(dllexport) int OPC_ClientCallMethod(unsigned int NodeId, char* value)
+{
+#ifdef UA_ENABLE_METHODCALLS
+    /* Call a remote method */
+    UA_Variant input;
+    //UA_String argString = UA_STRING((char*)"Hello Server");
+    UA_String argString = UA_STRING(value);
+    UA_Variant_init(&input);
+    UA_Variant_setScalarCopy(&input, &argString, &UA_TYPES[UA_TYPES_STRING]);
+    size_t outputSize;
+    UA_Variant* output;
+    //UA_StatusCode retval = UA_Client_call(client, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),UA_NODEID_NUMERIC(1, 62541), 1, &input, &outputSize, &output);  //62541 unsigned int 
+    UA_StatusCode retval = UA_Client_call(client, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_NUMERIC(1, NodeId), 1, &input, &outputSize, &output);
+    if (retval == UA_STATUSCODE_GOOD)
+    {
+        //printf("Method call was successful, and %lu returned values available.\n",      (unsigned long)outputSize);
+        SendLog(L"debug DLL:Method call was successful", 0);
+        UA_Array_delete(output, outputSize, &UA_TYPES[UA_TYPES_VARIANT]);
+    }
+    else
+    {
+        //printf("Method call was unsuccessful, and %x returned values available.\n", retval);
+        SendLog(L"debug DLL:Method call was unsuccessful", 0);
+    }
+    UA_Variant_clear(&input);
+#endif
+    return 0;
+}
+//-----------------------------------Вызов метода  из клиента-----------------------------------------------------
 
 
 
@@ -718,99 +850,6 @@ int main(void) {
 //--------------------В РАЗРАБОТКЕ--------------------------------
 
 
-
-//--------------------В РАЗРАБОТКЕ--------------------------------
-//tutorial_server_method.c
-
-static UA_StatusCode helloWorldMethodCallback(UA_Server *server,
-                         const UA_NodeId *sessionId, void *sessionHandle,
-                         const UA_NodeId *methodId, void *methodContext,
-                         const UA_NodeId *objectId, void *objectContext,
-                         size_t inputSize, const UA_Variant *input,
-                         size_t outputSize, UA_Variant *output) 
-{
-    UA_String *inputStr = (UA_String*)input->data;
-    UA_String tmp = UA_STRING_ALLOC("Hello ");
-    if(inputStr->length > 0) {
-        tmp.data = (UA_Byte *)UA_realloc(tmp.data, tmp.length + inputStr->length);
-        memcpy(&tmp.data[tmp.length], inputStr->data, inputStr->length);
-        tmp.length += inputStr->length;
-    }
-    UA_Variant_setScalarCopy(output, &tmp, &UA_TYPES[UA_TYPES_STRING]);
-    UA_String_clear(&tmp);
-    //UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Hello World was called");
-    SendLog(L"debug DLL:Hello World was called", 0);
-
-    return UA_STATUSCODE_GOOD;
-}
-
-static void addHelloWorldMethod(UA_Server *server) 
-{
-    UA_Argument inputArgument;
-    UA_Argument_init(&inputArgument);
-    inputArgument.description = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"A String");
-    inputArgument.name = UA_STRING((char*)"MyInput");
-    inputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-    inputArgument.valueRank = UA_VALUERANK_SCALAR;
-
-    UA_Argument outputArgument;
-    UA_Argument_init(&outputArgument);
-    outputArgument.description = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"A String");
-    outputArgument.name = UA_STRING((char*)"MyOutput");
-    outputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-    outputArgument.valueRank = UA_VALUERANK_SCALAR;
-
-    UA_MethodAttributes helloAttr = UA_MethodAttributes_default;
-    helloAttr.description = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"Say `Hello World`");
-    helloAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"Hello World");
-    helloAttr.executable = true;
-    helloAttr.userExecutable = true;
-    UA_Server_addMethodNode(server, UA_NODEID_NUMERIC(1,62541),
-                            UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
-                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                            UA_QUALIFIEDNAME(1, (char*)"hello world"),
-                            helloAttr, &helloWorldMethodCallback,
-                            1, &inputArgument, 1, &outputArgument, NULL, NULL);
-}
-
-extern "C" __declspec(dllexport) int OPC_ServerCreateMethod()
-{
-    addHelloWorldMethod(server);
-    return 0;
-}
-//--------------------В РАЗРАБОТКЕ--------------------------------
-
-
-
-
-//--------------------В РАЗРАБОТКЕ--------------------------------
-extern "C" __declspec(dllexport) int OPC_ClientCallMethod()
-{
-#ifdef UA_ENABLE_METHODCALLS
-    /* Call a remote method */
-    UA_Variant input;
-    UA_String argString = UA_STRING((char*)"Hello Server");
-    UA_Variant_init(&input);
-    UA_Variant_setScalarCopy(&input, &argString, &UA_TYPES[UA_TYPES_STRING]);
-    size_t outputSize;
-    UA_Variant* output;
-    UA_StatusCode retval = UA_Client_call(client, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),UA_NODEID_NUMERIC(1, 62541), 1, &input, &outputSize, &output);
-    if (retval == UA_STATUSCODE_GOOD) 
-    {
-        //printf("Method call was successful, and %lu returned values available.\n",      (unsigned long)outputSize);
-        SendLog(L"debug DLL:Method call was successful", 0);
-        UA_Array_delete(output, outputSize, &UA_TYPES[UA_TYPES_VARIANT]);
-    }
-    else 
-    {
-        //printf("Method call was unsuccessful, and %x returned values available.\n", retval);
-        SendLog(L"debug DLL:Method call was unsuccessful", 0);
-    }
-    UA_Variant_clear(&input);
-#endif
-    return 0;
-}
-//--------------------В РАЗРАБОТКЕ--------------------------------
 
 
 
