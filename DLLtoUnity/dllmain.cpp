@@ -792,6 +792,62 @@ UA_StatusCode find_datavariable_nodeid(UA_Server* server, const UA_NodeId object
 }
 
 
+void browseAll()
+{
+    SendLog(L"Browsing nodes in objects folder", 0);
+    
+    UA_BrowseRequest bReq;
+    UA_BrowseRequest_init(&bReq);
+    bReq.requestedMaxReferencesPerNode = 0;
+    bReq.nodesToBrowse = UA_BrowseDescription_new();
+    bReq.nodesToBrowseSize = 1;
+    bReq.nodesToBrowse[0].nodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER); // browse objects folder
+    bReq.nodesToBrowse[0].resultMask = UA_BROWSERESULTMASK_ALL; // return everything
+    UA_BrowseResponse bResp = UA_Client_Service_browse(client, bReq);
+    //printf("%-9s %-16s %-16s %-16s\n", "NAMESPACE", "NODEID", "BROWSE NAME", "DISPLAY NAME");
+    SendLog(L"NAMESPACE, NODEID, BROWSE NAME, DISPLAY NAME", 0);
+    for (size_t i = 0; i < bResp.resultsSize; ++i) 
+    {
+        for (size_t j = 0; j < bResp.results[i].referencesSize; ++j) 
+        {
+            UA_ReferenceDescription* ref = &(bResp.results[i].references[j]);
+            if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_NUMERIC) 
+            {
+                //printf("%-9u %-16u %-16.*s %-16.*s\n", ref->nodeId.nodeId.namespaceIndex,
+                //    ref->nodeId.nodeId.identifier.numeric, (int)ref->browseName.name.length,
+                //    ref->browseName.name.data, (int)ref->displayName.text.length,
+                //    ref->displayName.text.data);
+                UA_UInt16 a = ref->nodeId.nodeId.namespaceIndex;
+                UA_UInt32 b = ref->nodeId.nodeId.identifier.numeric;
+                int c = (int)ref->browseName.name.length;
+                UA_Byte* d = ref->browseName.name.data;
+                int e = (int)ref->displayName.text.length;
+                UA_Byte* f = ref->displayName.text.data;
+
+                char* convert = (char*)UA_malloc(sizeof(char) * ref->displayName.text.length + 1);
+                memcpy(convert, ref->displayName.text.data, ref->displayName.text.length);
+                convert[ref->displayName.text.length] = '\0';
+                std::wstringstream cls;
+                cls << convert;
+                std::wstring displayName = cls.str();
+
+                SendLog(displayName, 0);
+            }
+            else if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_STRING) 
+            {
+                printf("%-9u %-16.*s %-16.*s %-16.*s\n", ref->nodeId.nodeId.namespaceIndex,
+                    (int)ref->nodeId.nodeId.identifier.string.length,
+                    ref->nodeId.nodeId.identifier.string.data,
+                    (int)ref->browseName.name.length, ref->browseName.name.data,
+                    (int)ref->displayName.text.length, ref->displayName.text.data);
+            }
+        }
+    }
+    UA_BrowseRequest_clear(&bReq);
+    UA_BrowseResponse_clear(&bResp);
+}
+
+
 extern "C" __declspec(dllexport)  int OPC_TestObjectPump()
 {
     manuallyDefinePump(server);
@@ -810,7 +866,7 @@ extern "C" __declspec(dllexport)  int OPC_TestObjectPump()
     //int GetVariableID (groupname, varname) - таким образом узнаем из клиента
 
     //НО ЭТО если мы сами создаем это все
-    //иначе client из примеров - чтение списка всего на сервере и оттуда определяем ID
+    //иначе client из примеров - чтение списка всего на сервере и оттуда определяем ID - browseAll
 
 
 
@@ -858,7 +914,7 @@ extern "C" __declspec(dllexport)  int OPC_TestObjectPump()
         UA_Variant_delete(myVariant);
     }
 
-    
+    browseAll();
 
 
     return 0;
