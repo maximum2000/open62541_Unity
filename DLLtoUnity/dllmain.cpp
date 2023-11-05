@@ -50,30 +50,30 @@ email                : Maxim.Gammer@yandex.ru
 //1. SendLog - дебаг-вывод в unity
 
 //функции сервера:
-//1. int OPC_ServerCreate ()
-//2. int OPC_ServerUpdate ()
-//3. int OPC_ServerAddVariableDouble (description, displayName) // (char*)"the.answer", (char*)"the answer"
-//4. int OPC_ServerWriteValueDouble (description, value) //(char*)"the.answer", double
-//5. double OPC_ServerReadValueDouble (description) //(char*)"the.answer"
-//6. int OPC_ServerShutdown - выключение сервера
-//7. int OPC_ServerCreateMethod() - создание метода и обработчик метода
+//1. int OPC_ServerCreate () - создание сервера
+//2. int OPC_ServerUpdate () - обновление сервера
+//3. int OPC_ServerAddVariableDouble (description, displayName) // (char*)"the.answer", (char*)"the answer" - добавление переменной
+//4. int OPC_ServerWriteValueDouble (description, value) //(char*)"the.answer", double - запись значения переменной
+//5. double OPC_ServerReadValueDouble (description) //(char*)"the.answer" - чтение переменной
+//6. int OPC_ServerShutdown - выключение сервера 
+//7. int OPC_ServerCreateMethod(unsigned int nodeID, char* name, char* displayName, char* description) - создание метода и обработчик метода
+//8. int OPC_ServerCallMethod(unsigned int NodeId, char* value)  - Вызов метода  из сервера 
+
 
 //функции клиента:
-//1. int OPC_ClientConnect (url) // "opc.tcp://localhost:4840"
-//2. int OPC_ClientWriteValueDouble (description, value) //(char*)"the.answer", double
-//3. double OPC_ClientReadValueDouble (description) //(char*)"the.answer"
+//1. int OPC_ClientConnect (url) // "opc.tcp://localhost:4840" - подключение к серверу
+//2. int OPC_ClientWriteValueDouble (description, value) //(char*)"the.answer", double - запись значения переменной
+//3. double OPC_ClientReadValueDouble (description) //(char*)"the.answer" - чтение значения переменной
 //4. int OPC_ClientUpdate () - обновление клиента
 //5. int OPC_ClientDelete() - выключение клиента
-// 
-//6. int OPC_ClientCallMethod - вызов метода
-// int OPC_ClientSubscription() - подписка
+//6. int OPC_ClientCallMethod (unsigned int NodeId, char* value) - вызов метода
+//7. int OPC_ClientSubscription(char* varname, double interval) - подписка на изменение значения переменной
 
 
 //сделать:
 //tutorial_server_object - объектыи инстансы                                                                    +-
-    //tutorial_client_events - подписка на мониторинг переменной и события                                      +-
- //tutorial_server_method (tutorial_server_method_async) - методы                                               +-
-    //client  - вызов метода                                                                                    +-
+
+ 
     
 
 
@@ -442,7 +442,34 @@ extern "C" __declspec(dllexport) int OPC_ServerCreateMethod(unsigned int nodeID,
 //-----------------------------------Регистрация метода и обработчик вызова метода--------------------------------
 
 
+//-----------------------------------Вызов метода  из сервера-----------------------------------------------------
+extern "C" __declspec(dllexport) int OPC_ServerCallMethod(unsigned int NodeId, char* value)
+{
+    
+    UA_Argument inputArgument;
+    UA_Argument_init(&inputArgument);
+    inputArgument.description = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"A String");
+    inputArgument.name = UA_STRING((char*)"MyInput");
+    inputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+    inputArgument.valueRank = UA_VALUERANK_SCALAR;
 
+
+    UA_Variant* inputArguments = (UA_Variant*)UA_calloc(1, (sizeof(UA_Variant)));
+    UA_String _value = UA_STRING(value);
+    UA_Variant_setScalar(&inputArguments[0], &_value, &UA_TYPES[UA_TYPES_STRING]);
+
+    UA_CallMethodRequest callMethodRequest;
+    UA_CallMethodRequest_init(&callMethodRequest);
+    callMethodRequest.inputArgumentsSize = 1;
+    callMethodRequest.inputArguments = inputArguments;
+    callMethodRequest.objectId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
+    callMethodRequest.methodId = UA_NODEID_NUMERIC(1, NodeId);
+    UA_CallMethodResult response = UA_Server_call(server, &callMethodRequest);
+       
+    UA_CallMethodResult_clear(&response);
+    return 0;
+}
+//-----------------------------------Вызов метода  из сервера-----------------------------------------------------
 
 //-----------------------------------Вызов метода  из клиента-----------------------------------------------------
 extern "C" __declspec(dllexport) int OPC_ClientCallMethod(unsigned int NodeId, char* value)
@@ -457,6 +484,7 @@ extern "C" __declspec(dllexport) int OPC_ClientCallMethod(unsigned int NodeId, c
     size_t outputSize;
     UA_Variant* output;
     //UA_StatusCode retval = UA_Client_call(client, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),UA_NODEID_NUMERIC(1, 62541), 1, &input, &outputSize, &output);  //62541 unsigned int 
+
     UA_StatusCode retval = UA_Client_call(client, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_NUMERIC(1, NodeId), 1, &input, &outputSize, &output);
     if (retval == UA_STATUSCODE_GOOD)
     {
@@ -563,52 +591,52 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* varna
 
 //--------------------В РАЗРАБОТКЕ--------------------------------
 //tutorial_server_object.c
-/*
+
 static void manuallyDefinePump(UA_Server *server)
 {
     UA_NodeId pumpId; // get the nodeid assigned by the server
     UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
-    oAttr.displayName = UA_LOCALIZEDTEXT("en-US", "Pump (Manual)");
+    oAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"Pump (Manual)");
     UA_Server_addObjectNode(server, UA_NODEID_NULL,
                             UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
                             UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
-                            UA_QUALIFIEDNAME(1, "Pump (Manual)"), UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE),
+                            UA_QUALIFIEDNAME(1, (char*)"Pump (Manual)"), UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE),
                             oAttr, NULL, &pumpId);
 
     UA_VariableAttributes mnAttr = UA_VariableAttributes_default;
-    UA_String manufacturerName = UA_STRING("Pump King Ltd.");
+    UA_String manufacturerName = UA_STRING((char*)"Pump King Ltd.");
     UA_Variant_setScalar(&mnAttr.value, &manufacturerName, &UA_TYPES[UA_TYPES_STRING]);
-    mnAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ManufacturerName");
+    mnAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"ManufacturerName");
     UA_Server_addVariableNode(server, UA_NODEID_NULL, pumpId,
                               UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, "ManufacturerName"),
+                              UA_QUALIFIEDNAME(1, (char*)"ManufacturerName"),
                               UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), mnAttr, NULL, NULL);
 
     UA_VariableAttributes modelAttr = UA_VariableAttributes_default;
-    UA_String modelName = UA_STRING("Mega Pump 3000");
+    UA_String modelName = UA_STRING((char*)"Mega Pump 3000");
     UA_Variant_setScalar(&modelAttr.value, &modelName, &UA_TYPES[UA_TYPES_STRING]);
-    modelAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ModelName");
+    modelAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"ModelName");
     UA_Server_addVariableNode(server, UA_NODEID_NULL, pumpId,
                               UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, "ModelName"),
+                              UA_QUALIFIEDNAME(1, (char*)"ModelName"),
                               UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), modelAttr, NULL, NULL);
 
     UA_VariableAttributes statusAttr = UA_VariableAttributes_default;
     UA_Boolean status = true;
     UA_Variant_setScalar(&statusAttr.value, &status, &UA_TYPES[UA_TYPES_BOOLEAN]);
-    statusAttr.displayName = UA_LOCALIZEDTEXT("en-US", "Status");
+    statusAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"Status");
     UA_Server_addVariableNode(server, UA_NODEID_NULL, pumpId,
                               UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, "Status"),
+                              UA_QUALIFIEDNAME(1, (char*)"Status"),
                               UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), statusAttr, NULL, NULL);
 
     UA_VariableAttributes rpmAttr = UA_VariableAttributes_default;
     UA_Double rpm = 50.0;
     UA_Variant_setScalar(&rpmAttr.value, &rpm, &UA_TYPES[UA_TYPES_DOUBLE]);
-    rpmAttr.displayName = UA_LOCALIZEDTEXT("en-US", "MotorRPM");
+    rpmAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"MotorRPM");
     UA_Server_addVariableNode(server, UA_NODEID_NULL, pumpId,
                               UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, "MotorRPMs"),
+                              UA_QUALIFIEDNAME(1, (char*)"MotorRPMs"),
                               UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), rpmAttr, NULL, NULL);
 }
 
@@ -616,24 +644,24 @@ static void manuallyDefinePump(UA_Server *server)
 // predefined identifier for later use
 UA_NodeId pumpTypeId = {1, UA_NODEIDTYPE_NUMERIC, {1001}};
 
-static void
-defineObjectTypes(UA_Server *server) {
+static void defineObjectTypes(UA_Server *server) 
+{
     // Define the object type for "Device"
     UA_NodeId deviceTypeId; // get the nodeid assigned by the server
     UA_ObjectTypeAttributes dtAttr = UA_ObjectTypeAttributes_default;
-    dtAttr.displayName = UA_LOCALIZEDTEXT("en-US", "DeviceType");
+    dtAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"DeviceType");
     UA_Server_addObjectTypeNode(server, UA_NODEID_NULL,
                                 UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE),
                                 UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE),
-                                UA_QUALIFIEDNAME(1, "DeviceType"), dtAttr,
+                                UA_QUALIFIEDNAME(1, (char*)"DeviceType"), dtAttr,
                                 NULL, &deviceTypeId);
 
     UA_VariableAttributes mnAttr = UA_VariableAttributes_default;
-    mnAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ManufacturerName");
+    mnAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"ManufacturerName");
     UA_NodeId manufacturerNameId;
     UA_Server_addVariableNode(server, UA_NODEID_NULL, deviceTypeId,
                               UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, "ManufacturerName"),
+                              UA_QUALIFIEDNAME(1, (char*)"ManufacturerName"),
                               UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), mnAttr, NULL, &manufacturerNameId);
     // Make the manufacturer name mandatory //
     UA_Server_addReference(server, manufacturerNameId,
@@ -642,27 +670,27 @@ defineObjectTypes(UA_Server *server) {
 
 
     UA_VariableAttributes modelAttr = UA_VariableAttributes_default;
-    modelAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ModelName");
+    modelAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"ModelName");
     UA_Server_addVariableNode(server, UA_NODEID_NULL, deviceTypeId,
                               UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, "ModelName"),
+                              UA_QUALIFIEDNAME(1, (char*)"ModelName"),
                               UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), modelAttr, NULL, NULL);
 
     // Define the object type for "Pump" //
     UA_ObjectTypeAttributes ptAttr = UA_ObjectTypeAttributes_default;
-    ptAttr.displayName = UA_LOCALIZEDTEXT("en-US", "PumpType");
+    ptAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"PumpType");
     UA_Server_addObjectTypeNode(server, pumpTypeId,
                                 deviceTypeId, UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE),
-                                UA_QUALIFIEDNAME(1, "PumpType"), ptAttr,
+                                UA_QUALIFIEDNAME(1, (char*)"PumpType"), ptAttr,
                                 NULL, NULL);
 
     UA_VariableAttributes statusAttr = UA_VariableAttributes_default;
-    statusAttr.displayName = UA_LOCALIZEDTEXT("en-US", "Status");
+    statusAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"Status");
     statusAttr.valueRank = UA_VALUERANK_SCALAR;
     UA_NodeId statusId;
     UA_Server_addVariableNode(server, UA_NODEID_NULL, pumpTypeId,
                               UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, "Status"),
+                              UA_QUALIFIEDNAME(1, (char*)"Status"),
                               UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), statusAttr, NULL, &statusId);
     // Make the status variable mandatory //
     UA_Server_addReference(server, statusId,
@@ -670,34 +698,31 @@ defineObjectTypes(UA_Server *server) {
                            UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
 
     UA_VariableAttributes rpmAttr = UA_VariableAttributes_default;
-    rpmAttr.displayName = UA_LOCALIZEDTEXT("en-US", "MotorRPM");
+    rpmAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"MotorRPM");
     rpmAttr.valueRank = UA_VALUERANK_SCALAR;
     UA_Server_addVariableNode(server, UA_NODEID_NULL, pumpTypeId,
                               UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, "MotorRPMs"),
+                              UA_QUALIFIEDNAME(1, (char*)"MotorRPMs"),
                               UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), rpmAttr, NULL, NULL);
 }
 
 
 
-static void
-addPumpObjectInstance(UA_Server *server, char *name) {
+static void addPumpObjectInstance(UA_Server *server, char *name) 
+{
     UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
-    oAttr.displayName = UA_LOCALIZEDTEXT("en-US", name);
+    oAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", name);
     UA_Server_addObjectNode(server, UA_NODEID_NULL,
                             UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
                             UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
                             UA_QUALIFIEDNAME(1, name),
                             pumpTypeId, // this refers to the object type identifier 
-oAttr, NULL, NULL);
+                            oAttr, NULL, NULL);
 }
 
 
-static UA_StatusCode
-pumpTypeConstructor(UA_Server* server,
-    const UA_NodeId* sessionId, void* sessionContext,
-    const UA_NodeId* typeId, void* typeContext,
-    const UA_NodeId* nodeId, void** nodeContext) {
+static UA_StatusCode pumpTypeConstructor(UA_Server* server, const UA_NodeId* sessionId, void* sessionContext, const UA_NodeId* typeId, void* typeContext, const UA_NodeId* nodeId, void** nodeContext) 
+{
     UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "New pump created");
 
     // Find the NodeId of the status child variable
@@ -706,7 +731,7 @@ pumpTypeConstructor(UA_Server* server,
     rpe.referenceTypeId = UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT);
     rpe.isInverse = false;
     rpe.includeSubtypes = false;
-    rpe.targetName = UA_QUALIFIEDNAME(1, "Status");
+    rpe.targetName = UA_QUALIFIEDNAME(1, (char*)"Status");
 
     UA_BrowsePath bp;
     UA_BrowsePath_init(&bp);
@@ -714,11 +739,8 @@ pumpTypeConstructor(UA_Server* server,
     bp.relativePath.elementsSize = 1;
     bp.relativePath.elements = &rpe;
 
-    UA_BrowsePathResult bpr =
-        UA_Server_translateBrowsePathToNodeIds(server, &bp);
-    if (bpr.statusCode != UA_STATUSCODE_GOOD ||
-        bpr.targetsSize < 1)
-        return bpr.statusCode;
+    UA_BrowsePathResult bpr = UA_Server_translateBrowsePathToNodeIds(server, &bp);
+    if (bpr.statusCode != UA_STATUSCODE_GOOD || bpr.targetsSize < 1)  return bpr.statusCode;
 
     // Set the status value
     UA_Boolean status = true;
@@ -732,44 +754,27 @@ pumpTypeConstructor(UA_Server* server,
     return UA_STATUSCODE_GOOD;
 }
 
-static void
-addPumpTypeConstructor(UA_Server* server) {
+static void addPumpTypeConstructor(UA_Server* server) 
+{
     UA_NodeTypeLifecycle lifecycle;
     lifecycle.constructor = pumpTypeConstructor;
     lifecycle.destructor = NULL;
     UA_Server_setNodeTypeLifecycle(server, pumpTypeId, lifecycle);
 }
 
-// It follows the main server code, making use of the above definitions. 
 
-static volatile UA_Boolean running = true;
-static void stopHandler(int sign) {
-    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "received ctrl-c");
-    running = false;
-}
 
-int main(void) {
-    signal(SIGINT, stopHandler);
-    signal(SIGTERM, stopHandler);
-
-    UA_Server* server = UA_Server_new();
-    UA_ServerConfig_setDefault(UA_Server_getConfig(server));
-
+extern "C" __declspec(dllexport)  int OPC_TestObjectPump()
+{
     manuallyDefinePump(server);
     defineObjectTypes(server);
-    addPumpObjectInstance(server, "pump2");
-    addPumpObjectInstance(server, "pump3");
+    addPumpObjectInstance(server, (char *)"pump2");
+    addPumpObjectInstance(server, (char*)"pump3");
     addPumpTypeConstructor(server);
-    addPumpObjectInstance(server, "pump4");
-    addPumpObjectInstance(server, "pump5");
-
-    UA_StatusCode retval = UA_Server_run(server, &running);
-
-    UA_Server_delete(server);
-    return retval == UA_STATUSCODE_GOOD ? EXIT_SUCCESS : EXIT_FAILURE;
+    addPumpObjectInstance(server, (char*)"pump4");
+    addPumpObjectInstance(server, (char*)"pump5");
+    return 0;
 }
-*/
-//
 
 //--------------------В РАЗРАБОТКЕ--------------------------------
 
