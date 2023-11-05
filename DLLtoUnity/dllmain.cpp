@@ -591,7 +591,7 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* varna
 
 //--------------------В РАЗРАБОТКЕ--------------------------------
 //tutorial_server_object.c
-
+UA_NodeId pumpRpmId;
 static void manuallyDefinePump(UA_Server *server)
 {
     UA_NodeId pumpId; // get the nodeid assigned by the server
@@ -634,10 +634,11 @@ static void manuallyDefinePump(UA_Server *server)
     UA_Double rpm = 50.0;
     UA_Variant_setScalar(&rpmAttr.value, &rpm, &UA_TYPES[UA_TYPES_DOUBLE]);
     rpmAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"MotorRPM");
+    rpmAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
     UA_Server_addVariableNode(server, UA_NODEID_NULL, pumpId,
                               UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
                               UA_QUALIFIEDNAME(1, (char*)"MotorRPMs"),
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), rpmAttr, NULL, NULL);
+                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), rpmAttr, NULL, &pumpRpmId);
 }
 
 
@@ -762,6 +763,33 @@ static void addPumpTypeConstructor(UA_Server* server)
     UA_Server_setNodeTypeLifecycle(server, pumpTypeId, lifecycle);
 }
 
+//https://github.com/open62541/open62541/issues/3799
+UA_StatusCode find_datavariable_nodeid(UA_Server* server, const UA_NodeId object_id, const UA_QualifiedName name, UA_NodeId* node_id)
+{
+    UA_RelativePathElement rpe;
+    UA_RelativePathElement_init(&rpe);
+    rpe.referenceTypeId = UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT);
+    rpe.isInverse = false;
+    rpe.includeSubtypes = false;
+    rpe.targetName = name;
+
+    UA_BrowsePath bp;
+    UA_BrowsePath_init(&bp);
+    bp.startingNode = object_id;
+    bp.relativePath.elementsSize = 1;
+    bp.relativePath.elements = &rpe;
+
+    UA_BrowsePathResult bpr = UA_Server_translateBrowsePathToNodeIds(server, &bp);
+    UA_StatusCode rc = bpr.statusCode;
+    if (rc == UA_STATUSCODE_GOOD && bpr.targetsSize < 1)
+        rc = UA_STATUSCODE_BADNOMATCH;
+    if (rc == UA_STATUSCODE_GOOD)
+        *node_id = bpr.targets[0].targetId.nodeId;
+
+    UA_BrowsePathResult_deleteMembers(&bpr);
+
+    return rc;
+}
 
 
 extern "C" __declspec(dllexport)  int OPC_TestObjectPump()
@@ -773,6 +801,66 @@ extern "C" __declspec(dllexport)  int OPC_TestObjectPump()
     addPumpTypeConstructor(server);
     addPumpObjectInstance(server, (char*)"pump4");
     addPumpObjectInstance(server, (char*)"pump5");
+
+
+    //идея такая 
+    //int CreateGroup (name)  - возвразает NodeId объекта
+    //int CreateVariableInGroup (NodeId, name)  - создает переменную в группе и возвразает NodeId переменной, потом по нему можно писать в нее
+    //имена и NodeId мы будем кешировать в Dictonary и все
+    //int GetVariableID (groupname, varname) - таким образом узнаем из клиента
+
+    //НО ЭТО если мы сами создаем это все
+    //иначе client из примеров - чтение списка всего на сервере и оттуда определяем ID
+
+
+
+    //UA_Server_readObjectProperty
+    //UA_Server_writeObjectProperty
+
+    
+
+    //запись из сервера
+    if (false)
+    {
+        UA_NodeId myDoubleNodeId = pumpRpmId;
+        /* Write a different double value */
+        UA_Double myDouble = 456.789;
+        UA_Variant myVar;
+        UA_Variant_init(&myVar);
+        UA_Variant_setScalar(&myVar, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+        UA_Server_writeValue(server, myDoubleNodeId, myVar);
+        /* Set the status code of the value to an error code. The function
+         * UA_Server_write provides access to the raw service. The above
+         * UA_Server_writeValue is syntactic sugar for writing a specific node
+         * attribute with the write service. */
+        UA_WriteValue wv;
+        UA_WriteValue_init(&wv);
+        wv.nodeId = myDoubleNodeId;
+        wv.attributeId = UA_ATTRIBUTEID_VALUE;
+        wv.value.status = UA_STATUSCODE_BADNOTCONNECTED;
+        wv.value.hasStatus = true;
+        UA_Server_write(server, &wv);
+        /* Reset the variable to a good statuscode with a value */
+        wv.value.hasStatus = false;
+        wv.value.value = myVar;
+        wv.value.hasValue = true;
+        UA_Server_write(server, &wv);
+    }
+
+    //запись из клиента
+    if (true)
+    {
+        UA_NodeId myDoubleNodeId = pumpRpmId;
+        UA_Double myDouble = 321.777;
+        UA_Variant* myVariant = UA_Variant_new();
+        UA_Variant_setScalarCopy(myVariant, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+        UA_Client_writeValueAttribute(client, myDoubleNodeId, myVariant);
+        UA_Variant_delete(myVariant);
+    }
+
+    
+
+
     return 0;
 }
 
