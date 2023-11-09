@@ -767,18 +767,8 @@ extern "C" __declspec(dllexport)  int OPC_TestObjectPump()
     manuallyDefinePump(server);
     
 
-
-    //идея такая 
-    //int CreateGroup (name)  - возвразает NodeId объекта
-    //int CreateVariableInGroup (NodeId, name)  - создает переменную в группе и возвразает NodeId переменной, потом по нему можно писать в нее
-    //имена и NodeId мы будем кешировать в Dictonary и все
-    //int GetVariableID (groupname, varname) - таким образом узнаем из клиента
-
-    //НО ЭТО если мы сами создаем это все
     //иначе client из примеров - чтение списка всего на сервере и оттуда определяем ID - browseAll
-
-
-
+    //или получаем через вызов метода 
 
 
     std::string objectName = "Pump (Manual)";
