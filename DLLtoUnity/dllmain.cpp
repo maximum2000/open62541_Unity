@@ -44,6 +44,17 @@ email                : Maxim.Gammer@yandex.ru
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
 
+class ObjectNodeVariables
+{
+public:
+
+    UA_NodeId nodeId;
+    //связи имя имя_атрибута -> nodeID
+    std::map < std::string, UA_NodeId> VariableNode_NameID;
+};
+//связи имя объекта_имя ->  nodeID
+std::map < std::string, ObjectNodeVariables*> ObjectNodes;
+
 
 
 //функции общие
@@ -53,9 +64,9 @@ email                : Maxim.Gammer@yandex.ru
 //функции сервера:
 //1. int OPC_ServerCreate () - создание сервера
 //2. int OPC_ServerUpdate () - обновление сервера
-//3. int OPC_ServerAddVariableDouble (description, displayName) // (char*)"the.answer", (char*)"the answer" - добавление переменной
-//4. int OPC_ServerWriteValueDouble (description, value) //(char*)"the.answer", double - запись значения переменной
-//5. double OPC_ServerReadValueDouble (description) //(char*)"the.answer" - чтение переменной
+//3. int OPC_ServerAddVariableDouble ( objectname, description, displayName) // (char*)"the.answer", (char*)"the answer" - добавление переменной
+//4. int OPC_ServerWriteValueDouble (objectname, description, value) //(char*)"the.answer", double - запись значения переменной
+//5. double OPC_ServerReadValueDouble (objectname, description) //(char*)"the.answer" - чтение переменной
 //6. int OPC_ServerShutdown - выключение сервера 
 //7. int OPC_ServerCreateMethod(unsigned int nodeID, char* name, char* displayName, char* description) - создание метода и обработчик метода
 //8. int OPC_ServerCallMethod(unsigned int NodeId, char* value)  - Вызов метода  из сервера 
@@ -186,6 +197,7 @@ extern "C" __declspec(dllexport) int OPC_ServerCreate()
     server = UA_Server_new();
     UA_ServerConfig_setDefault(UA_Server_getConfig(server));
     UA_ServerConfig* config = UA_Server_getConfig(server);
+    config->applicationDescription.applicationName =  UA_LOCALIZEDTEXT((char*)"en - US", (char*)"LContent OPC server");
     config->verifyRequestTimestamp = UA_RULEHANDLING_ACCEPT;
     #ifdef UA_ENABLE_WEBSOCKET_SERVER
         UA_ServerConfig_addNetworkLayerWS(UA_Server_getConfig(server), 7681, 0, 0, NULL, NULL);
@@ -211,29 +223,78 @@ extern "C" __declspec(dllexport) int OPC_ServerUpdate()
 }
 
 //3. int OPC_ServerAddVariableDouble (description, displayName) // (char*)"the.answer", (char*)"the answer"
-extern "C" __declspec(dllexport)  int OPC_ServerAddVariableDouble(char* descriptionString, char* displayNameString)
+extern "C" __declspec(dllexport)  int OPC_ServerAddVariableDouble(char* objectString, char* descriptionString, char* displayNameString)
 {
-    /* Define the attribute of the myInteger variable node */
-    UA_VariableAttributes attr = UA_VariableAttributes_default;
-    UA_Double myDouble = 0;
-    UA_Variant_setScalar(&attr.value, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
-    attr.description = UA_LOCALIZEDTEXT((char*)"en - US", descriptionString);   //(char*)"the.answer"
-    attr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", displayNameString);     //(char*)"the answer"
-    attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    /* Add the variable node to the information model */
-    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, descriptionString);
-    UA_QualifiedName myDoubleName = UA_QUALIFIEDNAME(1, displayNameString);
-    UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
-    UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
-    UA_Server_addVariableNode(server, myIntegerNodeId, parentNodeId,parentReferenceNodeId, myDoubleName, UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, NULL);
+    std::string objectName(objectString);
+
+    //если это атрибут объекта
+    if (objectName!="")
+    {
+        //если этого объекта еще нет - создаем и запоминаем
+        if (ObjectNodes.count(objectName) == 0)
+        {
+            UA_NodeId ObjectNodeId; // get the nodeid assigned by the server
+            UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
+            oAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)objectName.c_str()); //(char*)"Pump (Manual)"
+            UA_Server_addObjectNode(server, UA_NODEID_NULL, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES), UA_QUALIFIEDNAME(1, (char*)"Pump (Manual)"), UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE), oAttr, NULL, &ObjectNodeId);
+            //
+            ObjectNodeVariables* newObjectNode = new ObjectNodeVariables;
+            newObjectNode->nodeId = ObjectNodeId;
+            ObjectNodes[objectName] = newObjectNode;
+        }
+        //теперь создаем атрибут в объекте
+        UA_NodeId ObjectNodeId = ObjectNodes[objectName]->nodeId;
+        std::string VariableName(descriptionString);
+        UA_NodeId VariableNodeId;
+        UA_VariableAttributes attr = UA_VariableAttributes_default;
+        UA_Double myDouble = 0;
+        UA_Variant_setScalar(&attr.value, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+        attr.description = UA_LOCALIZEDTEXT((char*)"en - US", (char*)VariableName.c_str());
+        attr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)VariableName.c_str()); //(char*)"MotorRPM"
+        attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+        attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+        UA_Server_addVariableNode(server, UA_NODEID_NULL, ObjectNodeId, UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT), UA_QUALIFIEDNAME(1, (char*)VariableName.c_str()), UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, &VariableNodeId);
+        ObjectNodes[objectName]->VariableNode_NameID[VariableName] = VariableNodeId;
+    }
+    //если это НЕ атрибут объекта
+    else
+    {
+        //просто создаем переменную в корне        
+        UA_VariableAttributes attr = UA_VariableAttributes_default;
+        UA_Double myDouble = 0;
+        UA_Variant_setScalar(&attr.value, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+        attr.description = UA_LOCALIZEDTEXT((char*)"en - US", descriptionString);   //(char*)"the.answer"
+        attr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", displayNameString);     //(char*)"the answer"
+        attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+        attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+        //Add the variable node to the information model
+        UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, descriptionString);
+        UA_QualifiedName myDoubleName = UA_QUALIFIEDNAME(1, displayNameString);
+        UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
+        UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
+        UA_Server_addVariableNode(server, myIntegerNodeId, parentNodeId, parentReferenceNodeId, myDoubleName, UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, NULL);
+    }
     return 0;
 }
 
 //4. int OPC_ServerWriteValueDouble (description, value) //(char*)"the.answer", double
-extern "C" __declspec(dllexport)  int OPC_ServerWriteValueDouble(char* descriptionString, double value)
+extern "C" __declspec(dllexport)  int OPC_ServerWriteValueDouble(char* objectString, char* descriptionString, double value)
 {
-    UA_NodeId myDoubleNodeId = UA_NODEID_STRING(1, descriptionString);
+    UA_NodeId myDoubleNodeId;
+    std::string objectName(objectString);
+    std::string attributeName(descriptionString);
+
+    //если это атрибут объекта
+    if (objectName != "")
+    {
+        myDoubleNodeId = ObjectNodes[objectName]->VariableNode_NameID[attributeName];
+    }
+    else
+    {
+        myDoubleNodeId = UA_NODEID_STRING(1, descriptionString);
+    }
+
+    
 
     /* Write a different double value */
     UA_Double myDouble = value;
@@ -266,9 +327,22 @@ extern "C" __declspec(dllexport)  int OPC_ServerWriteValueDouble(char* descripti
 
 
 //5. double OPC_ServerReadValueDouble (description) //(char*)"the.answer"
-extern "C" __declspec(dllexport) double OPC_ServerReadValueDouble(char* descriptionString)
+extern "C" __declspec(dllexport) double OPC_ServerReadValueDouble(char* objectString, char* descriptionString)
 {
-    UA_NodeId myDoubleNodeId = UA_NODEID_STRING(1, descriptionString);
+    UA_NodeId myDoubleNodeId;
+    std::string objectName(objectString);
+    std::string attributeName(descriptionString);
+
+    //если это атрибут объекта
+    if (objectName != "")
+    {
+        myDoubleNodeId = ObjectNodes[objectName]->VariableNode_NameID[attributeName];
+    }
+    else
+    {
+        myDoubleNodeId = UA_NODEID_STRING(1, descriptionString);
+    }
+
     UA_Variant out;
     UA_Variant_init(&out);
     UA_Server_readValue(server, myDoubleNodeId, &out);
@@ -584,16 +658,7 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* varna
 
 
 
-class ObjectNodeVariables
-{
-    public:
 
-    UA_NodeId nodeId;
-    //связи имя имя_атрибута -> nodeID
-    std::map < std::string, UA_NodeId> VariableNode_NameID;
-};
-//связи имя объекта_имя ->  nodeID
-std::map < std::string, ObjectNodeVariables*> ObjectNodes;
 
 
 
@@ -714,8 +779,7 @@ extern "C" __declspec(dllexport)  int OPC_TestObjectPump()
 
 
 
-    //UA_Server_readObjectProperty
-    //UA_Server_writeObjectProperty
+
 
     std::string objectName = "Pump (Manual)";
     std::string VariableName = "MotorRPM";
@@ -788,7 +852,8 @@ extern "C" __declspec(dllexport)  int OPC_TestObjectPump()
 
 
 //--------------OLD and TEST------------------------------------------------------------
-
+    //UA_Server_readObjectProperty
+    //UA_Server_writeObjectProperty
 /*
     //defineObjectTypes(server);
     //addPumpObjectInstance(server, (char *)"pump2");
