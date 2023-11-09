@@ -11,6 +11,7 @@ email                : Maxim.Gammer@yandex.ru
 #include <stdlib.h>
 #include <string>
 #include <sstream>
+#include <map>
 
 //server
 #include <open62541/client_config_default.h>
@@ -58,6 +59,10 @@ email                : Maxim.Gammer@yandex.ru
 //6. int OPC_ServerShutdown - выключение сервера 
 //7. int OPC_ServerCreateMethod(unsigned int nodeID, char* name, char* displayName, char* description) - создание метода и обработчик метода
 //8. int OPC_ServerCallMethod(unsigned int NodeId, char* value)  - Вызов метода  из сервера 
+
+
+//Про методы: например можно сделать метод - создать игрока передать туда имя и тип и в ответ получить ок или не ок, можно и в ответ имя получить
+
 
 
 //функции клиента:
@@ -579,11 +584,16 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* varna
 
 
 
+class ObjectNodeVariables
+{
+    public:
 
-
-
-
-
+    UA_NodeId nodeId;
+    //связи имя имя_атрибута -> nodeID
+    std::map < std::string, UA_NodeId> VariableNode_NameID;
+};
+//связи имя объекта_имя ->  nodeID
+std::map < std::string, ObjectNodeVariables*> ObjectNodes;
 
 
 
@@ -591,61 +601,206 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* varna
 
 //--------------------В РАЗРАБОТКЕ--------------------------------
 //tutorial_server_object.c
-UA_NodeId pumpRpmId;
+//UA_NodeId pumpRpmId;
 static void manuallyDefinePump(UA_Server *server)
 {
-    UA_NodeId pumpId; // get the nodeid assigned by the server
-    UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
-    oAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"Pump (Manual)");
-    UA_Server_addObjectNode(server, UA_NODEID_NULL,
-                            UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
-                            UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
-                            UA_QUALIFIEDNAME(1, (char*)"Pump (Manual)"), UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE),
-                            oAttr, NULL, &pumpId);
+    std::string pumpName = "Pump (Manual)";
 
-    UA_VariableAttributes mnAttr = UA_VariableAttributes_default;
-    UA_String manufacturerName = UA_STRING((char*)"Pump King Ltd.");
-    UA_Variant_setScalar(&mnAttr.value, &manufacturerName, &UA_TYPES[UA_TYPES_STRING]);
-    mnAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"ManufacturerName");
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, pumpId,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, (char*)"ManufacturerName"),
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), mnAttr, NULL, NULL);
+    {
+        UA_NodeId pumpId; // get the nodeid assigned by the server
+        UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
+        oAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)pumpName.c_str()); //(char*)"Pump (Manual)"
+        UA_Server_addObjectNode(server, UA_NODEID_NULL,
+            UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
+            UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
+            UA_QUALIFIEDNAME(1, (char*)"Pump (Manual)"), UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE),
+            oAttr, NULL, &pumpId);
 
-    UA_VariableAttributes modelAttr = UA_VariableAttributes_default;
-    UA_String modelName = UA_STRING((char*)"Mega Pump 3000");
-    UA_Variant_setScalar(&modelAttr.value, &modelName, &UA_TYPES[UA_TYPES_STRING]);
-    modelAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"ModelName");
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, pumpId,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, (char*)"ModelName"),
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), modelAttr, NULL, NULL);
+        ObjectNodeVariables* newObjectNode = new ObjectNodeVariables;
+        newObjectNode->nodeId = pumpId;
+        ObjectNodes[pumpName] = newObjectNode;
+    }
 
-    UA_VariableAttributes statusAttr = UA_VariableAttributes_default;
-    UA_Boolean status = true;
-    UA_Variant_setScalar(&statusAttr.value, &status, &UA_TYPES[UA_TYPES_BOOLEAN]);
-    statusAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"Status");
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, pumpId,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, (char*)"Status"),
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), statusAttr, NULL, NULL);
+    {
+        std::string VariableName = "ManufacturerName";
+        UA_NodeId VariableNodeId;
+        UA_NodeId ObjectNodeId = ObjectNodes[pumpName]->nodeId;
+        
 
-    UA_VariableAttributes rpmAttr = UA_VariableAttributes_default;
-    UA_Double rpm = 50.0;
-    UA_Variant_setScalar(&rpmAttr.value, &rpm, &UA_TYPES[UA_TYPES_DOUBLE]);
-    rpmAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"MotorRPM");
-    rpmAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, pumpId,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, (char*)"MotorRPMs"),
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), rpmAttr, NULL, &pumpRpmId);
+        UA_VariableAttributes mnAttr = UA_VariableAttributes_default;
+        UA_String manufacturerName = UA_STRING((char*)"Pump King Ltd.");
+        UA_Variant_setScalar(&mnAttr.value, &manufacturerName, &UA_TYPES[UA_TYPES_STRING]);
+        mnAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)VariableName.c_str()); //"ManufacturerName"
+        UA_Server_addVariableNode(server, UA_NODEID_NULL, ObjectNodeId, //pumpId
+            UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+            UA_QUALIFIEDNAME(1, (char*)VariableName.c_str()),
+            UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), mnAttr, NULL, &VariableNodeId); //, NULL)
+        ObjectNodes[pumpName]->VariableNode_NameID[VariableName] = VariableNodeId;
+    }
+
+    {
+        std::string VariableName = "ModelName";
+        UA_NodeId VariableNodeId;
+        UA_NodeId ObjectNodeId = ObjectNodes[pumpName]->nodeId;
+
+        UA_VariableAttributes modelAttr = UA_VariableAttributes_default;
+        UA_String modelName = UA_STRING((char*)"Mega Pump 3000");
+        UA_Variant_setScalar(&modelAttr.value, &modelName, &UA_TYPES[UA_TYPES_STRING]);
+        modelAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)VariableName.c_str());
+        UA_Server_addVariableNode(server, UA_NODEID_NULL, ObjectNodeId, //pumpId
+            UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+            UA_QUALIFIEDNAME(1, (char*)VariableName.c_str()),
+            UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), modelAttr, NULL, &VariableNodeId); //, NULL)
+        ObjectNodes[pumpName]->VariableNode_NameID[VariableName] = VariableNodeId;
+    }
+
+    {
+        std::string VariableName = "Status";
+        UA_NodeId VariableNodeId;
+        UA_NodeId ObjectNodeId = ObjectNodes[pumpName]->nodeId;
+
+        UA_VariableAttributes statusAttr = UA_VariableAttributes_default;
+        UA_Boolean status = true;
+        UA_Variant_setScalar(&statusAttr.value, &status, &UA_TYPES[UA_TYPES_BOOLEAN]);
+        statusAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)VariableName.c_str()); //(char*)"Status"
+        UA_Server_addVariableNode(server, UA_NODEID_NULL, ObjectNodeId, //pumpId
+            UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+            UA_QUALIFIEDNAME(1, (char*)VariableName.c_str()),
+            UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), statusAttr, NULL, &VariableNodeId);
+        ObjectNodes[pumpName]->VariableNode_NameID[VariableName] = VariableNodeId;
+    }
+
+    {
+        std::string VariableName = "MotorRPM";
+        UA_NodeId VariableNodeId;
+        UA_NodeId ObjectNodeId = ObjectNodes[pumpName]->nodeId;
+
+        UA_VariableAttributes rpmAttr = UA_VariableAttributes_default;
+        UA_Double rpm = 50.1;
+        UA_Variant_setScalar(&rpmAttr.value, &rpm, &UA_TYPES[UA_TYPES_DOUBLE]);
+        rpmAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)VariableName.c_str()); //(char*)"MotorRPM"
+        rpmAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+        UA_Server_addVariableNode(server, UA_NODEID_NULL, ObjectNodeId, //pumpId
+            UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+            UA_QUALIFIEDNAME(1, (char*)VariableName.c_str()),
+            UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), rpmAttr, NULL, &VariableNodeId); //&pumpRpmId
+        ObjectNodes[pumpName]->VariableNode_NameID[VariableName] = VariableNodeId;
+    }
 }
 
+
+
+
+
+
+
+
+
+
+extern "C" __declspec(dllexport)  int OPC_TestObjectPump()
+{
+    manuallyDefinePump(server);
+    
+
+
+    //идея такая 
+    //int CreateGroup (name)  - возвразает NodeId объекта
+    //int CreateVariableInGroup (NodeId, name)  - создает переменную в группе и возвразает NodeId переменной, потом по нему можно писать в нее
+    //имена и NodeId мы будем кешировать в Dictonary и все
+    //int GetVariableID (groupname, varname) - таким образом узнаем из клиента
+
+    //НО ЭТО если мы сами создаем это все
+    //иначе client из примеров - чтение списка всего на сервере и оттуда определяем ID - browseAll
+
+
+
+    //UA_Server_readObjectProperty
+    //UA_Server_writeObjectProperty
+
+    std::string objectName = "Pump (Manual)";
+    std::string VariableName = "MotorRPM";
+    UA_NodeId pumpRpmId = ObjectNodes[objectName]->VariableNode_NameID[VariableName];
+
+    //запись из сервера
+    if (false)
+    {
+        UA_NodeId myDoubleNodeId = pumpRpmId;
+        /* Write a different double value */
+        UA_Double myDouble = 456.789;
+        UA_Variant myVar;
+        UA_Variant_init(&myVar);
+        UA_Variant_setScalar(&myVar, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+        UA_Server_writeValue(server, myDoubleNodeId, myVar);
+        /* Set the status code of the value to an error code. The function
+         * UA_Server_write provides access to the raw service. The above
+         * UA_Server_writeValue is syntactic sugar for writing a specific node
+         * attribute with the write service. */
+        UA_WriteValue wv;
+        UA_WriteValue_init(&wv);
+        wv.nodeId = myDoubleNodeId;
+        wv.attributeId = UA_ATTRIBUTEID_VALUE;
+        wv.value.status = UA_STATUSCODE_BADNOTCONNECTED;
+        wv.value.hasStatus = true;
+        UA_Server_write(server, &wv);
+        /* Reset the variable to a good statuscode with a value */
+        wv.value.hasStatus = false;
+        wv.value.value = myVar;
+        wv.value.hasValue = true;
+        UA_Server_write(server, &wv);
+    }
+
+    //запись из клиента
+    if (true)
+    {
+        UA_NodeId myDoubleNodeId = pumpRpmId;
+        UA_Double myDouble = 321.777;
+        UA_Variant* myVariant = UA_Variant_new();
+        UA_Variant_setScalarCopy(myVariant, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+        UA_Client_writeValueAttribute(client, myDoubleNodeId, myVariant);
+        UA_Variant_delete(myVariant);
+    }
+
+    //browseAll();
+
+
+    return 0;
+}
+
+//--------------------В РАЗРАБОТКЕ--------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//--------------OLD and TEST------------------------------------------------------------
+
+/*
+    //defineObjectTypes(server);
+    //addPumpObjectInstance(server, (char *)"pump2");
+    //addPumpObjectInstance(server, (char*)"pump3");
+    //addPumpTypeConstructor(server);
+    //addPumpObjectInstance(server, (char*)"pump4");
+    //addPumpObjectInstance(server, (char*)"pump5");
 
 // predefined identifier for later use
 UA_NodeId pumpTypeId = {1, UA_NODEIDTYPE_NUMERIC, {1001}};
 
-static void defineObjectTypes(UA_Server *server) 
+static void defineObjectTypes(UA_Server *server)
 {
     // Define the object type for "Device"
     UA_NodeId deviceTypeId; // get the nodeid assigned by the server
@@ -709,7 +864,7 @@ static void defineObjectTypes(UA_Server *server)
 
 
 
-static void addPumpObjectInstance(UA_Server *server, char *name) 
+static void addPumpObjectInstance(UA_Server *server, char *name)
 {
     UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
     oAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", name);
@@ -717,12 +872,12 @@ static void addPumpObjectInstance(UA_Server *server, char *name)
                             UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
                             UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
                             UA_QUALIFIEDNAME(1, name),
-                            pumpTypeId, // this refers to the object type identifier 
+                            pumpTypeId, // this refers to the object type identifier
                             oAttr, NULL, NULL);
 }
 
 
-static UA_StatusCode pumpTypeConstructor(UA_Server* server, const UA_NodeId* sessionId, void* sessionContext, const UA_NodeId* typeId, void* typeContext, const UA_NodeId* nodeId, void** nodeContext) 
+static UA_StatusCode pumpTypeConstructor(UA_Server* server, const UA_NodeId* sessionId, void* sessionContext, const UA_NodeId* typeId, void* typeContext, const UA_NodeId* nodeId, void** nodeContext)
 {
     UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "New pump created");
 
@@ -755,14 +910,76 @@ static UA_StatusCode pumpTypeConstructor(UA_Server* server, const UA_NodeId* ses
     return UA_STATUSCODE_GOOD;
 }
 
-static void addPumpTypeConstructor(UA_Server* server) 
+static void addPumpTypeConstructor(UA_Server* server)
 {
     UA_NodeTypeLifecycle lifecycle;
     lifecycle.constructor = pumpTypeConstructor;
     lifecycle.destructor = NULL;
     UA_Server_setNodeTypeLifecycle(server, pumpTypeId, lifecycle);
 }
+*/
 
+
+//Вывод вструктуры всего на сервере
+/*
+void browseAll()
+{
+    SendLog(L"Browsing nodes in objects folder", 0);
+
+    UA_BrowseRequest bReq;
+    UA_BrowseRequest_init(&bReq);
+    bReq.requestedMaxReferencesPerNode = 0;
+    bReq.nodesToBrowse = UA_BrowseDescription_new();
+    bReq.nodesToBrowseSize = 1;
+    bReq.nodesToBrowse[0].nodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER); // browse objects folder
+    bReq.nodesToBrowse[0].resultMask = UA_BROWSERESULTMASK_ALL; // return everything
+    UA_BrowseResponse bResp = UA_Client_Service_browse(client, bReq);
+    //printf("%-9s %-16s %-16s %-16s\n", "NAMESPACE", "NODEID", "BROWSE NAME", "DISPLAY NAME");
+    SendLog(L"NAMESPACE, NODEID, BROWSE NAME, DISPLAY NAME", 0);
+    for (size_t i = 0; i < bResp.resultsSize; ++i)
+    {
+        for (size_t j = 0; j < bResp.results[i].referencesSize; ++j)
+        {
+            UA_ReferenceDescription* ref = &(bResp.results[i].references[j]);
+            if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_NUMERIC)
+            {
+                //printf("%-9u %-16u %-16.*s %-16.*s\n", ref->nodeId.nodeId.namespaceIndex,
+                //    ref->nodeId.nodeId.identifier.numeric, (int)ref->browseName.name.length,
+                //    ref->browseName.name.data, (int)ref->displayName.text.length,
+                //    ref->displayName.text.data);
+                UA_UInt16 a = ref->nodeId.nodeId.namespaceIndex;
+                UA_UInt32 b = ref->nodeId.nodeId.identifier.numeric;
+                int c = (int)ref->browseName.name.length;
+                UA_Byte* d = ref->browseName.name.data;
+                int e = (int)ref->displayName.text.length;
+                UA_Byte* f = ref->displayName.text.data;
+
+                char* convert = (char*)UA_malloc(sizeof(char) * ref->displayName.text.length + 1);
+                memcpy(convert, ref->displayName.text.data, ref->displayName.text.length);
+                convert[ref->displayName.text.length] = '\0';
+                std::wstringstream cls;
+                cls << convert;
+                std::wstring displayName = cls.str();
+
+                SendLog(displayName, 0);
+            }
+            else if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_STRING)
+            {
+                printf("%-9u %-16.*s %-16.*s %-16.*s\n", ref->nodeId.nodeId.namespaceIndex,
+                    (int)ref->nodeId.nodeId.identifier.string.length,
+                    ref->nodeId.nodeId.identifier.string.data,
+                    (int)ref->browseName.name.length, ref->browseName.name.data,
+                    (int)ref->displayName.text.length, ref->displayName.text.data);
+            }
+        }
+    }
+    UA_BrowseRequest_clear(&bReq);
+    UA_BrowseResponse_clear(&bResp);
+}
+*/
+
+
+/*
 //https://github.com/open62541/open62541/issues/3799
 UA_StatusCode find_datavariable_nodeid(UA_Server* server, const UA_NodeId object_id, const UA_QualifiedName name, UA_NodeId* node_id)
 {
@@ -790,160 +1007,7 @@ UA_StatusCode find_datavariable_nodeid(UA_Server* server, const UA_NodeId object
 
     return rc;
 }
-
-
-void browseAll()
-{
-    SendLog(L"Browsing nodes in objects folder", 0);
-    
-    UA_BrowseRequest bReq;
-    UA_BrowseRequest_init(&bReq);
-    bReq.requestedMaxReferencesPerNode = 0;
-    bReq.nodesToBrowse = UA_BrowseDescription_new();
-    bReq.nodesToBrowseSize = 1;
-    bReq.nodesToBrowse[0].nodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER); // browse objects folder
-    bReq.nodesToBrowse[0].resultMask = UA_BROWSERESULTMASK_ALL; // return everything
-    UA_BrowseResponse bResp = UA_Client_Service_browse(client, bReq);
-    //printf("%-9s %-16s %-16s %-16s\n", "NAMESPACE", "NODEID", "BROWSE NAME", "DISPLAY NAME");
-    SendLog(L"NAMESPACE, NODEID, BROWSE NAME, DISPLAY NAME", 0);
-    for (size_t i = 0; i < bResp.resultsSize; ++i) 
-    {
-        for (size_t j = 0; j < bResp.results[i].referencesSize; ++j) 
-        {
-            UA_ReferenceDescription* ref = &(bResp.results[i].references[j]);
-            if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_NUMERIC) 
-            {
-                //printf("%-9u %-16u %-16.*s %-16.*s\n", ref->nodeId.nodeId.namespaceIndex,
-                //    ref->nodeId.nodeId.identifier.numeric, (int)ref->browseName.name.length,
-                //    ref->browseName.name.data, (int)ref->displayName.text.length,
-                //    ref->displayName.text.data);
-                UA_UInt16 a = ref->nodeId.nodeId.namespaceIndex;
-                UA_UInt32 b = ref->nodeId.nodeId.identifier.numeric;
-                int c = (int)ref->browseName.name.length;
-                UA_Byte* d = ref->browseName.name.data;
-                int e = (int)ref->displayName.text.length;
-                UA_Byte* f = ref->displayName.text.data;
-
-                char* convert = (char*)UA_malloc(sizeof(char) * ref->displayName.text.length + 1);
-                memcpy(convert, ref->displayName.text.data, ref->displayName.text.length);
-                convert[ref->displayName.text.length] = '\0';
-                std::wstringstream cls;
-                cls << convert;
-                std::wstring displayName = cls.str();
-
-                SendLog(displayName, 0);
-            }
-            else if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_STRING) 
-            {
-                printf("%-9u %-16.*s %-16.*s %-16.*s\n", ref->nodeId.nodeId.namespaceIndex,
-                    (int)ref->nodeId.nodeId.identifier.string.length,
-                    ref->nodeId.nodeId.identifier.string.data,
-                    (int)ref->browseName.name.length, ref->browseName.name.data,
-                    (int)ref->displayName.text.length, ref->displayName.text.data);
-            }
-        }
-    }
-    UA_BrowseRequest_clear(&bReq);
-    UA_BrowseResponse_clear(&bResp);
-}
-
-
-extern "C" __declspec(dllexport)  int OPC_TestObjectPump()
-{
-    manuallyDefinePump(server);
-    defineObjectTypes(server);
-    addPumpObjectInstance(server, (char *)"pump2");
-    addPumpObjectInstance(server, (char*)"pump3");
-    addPumpTypeConstructor(server);
-    addPumpObjectInstance(server, (char*)"pump4");
-    addPumpObjectInstance(server, (char*)"pump5");
-
-
-    //идея такая 
-    //int CreateGroup (name)  - возвразает NodeId объекта
-    //int CreateVariableInGroup (NodeId, name)  - создает переменную в группе и возвразает NodeId переменной, потом по нему можно писать в нее
-    //имена и NodeId мы будем кешировать в Dictonary и все
-    //int GetVariableID (groupname, varname) - таким образом узнаем из клиента
-
-    //НО ЭТО если мы сами создаем это все
-    //иначе client из примеров - чтение списка всего на сервере и оттуда определяем ID - browseAll
-
-
-
-    //UA_Server_readObjectProperty
-    //UA_Server_writeObjectProperty
-
-    
-
-    //запись из сервера
-    if (false)
-    {
-        UA_NodeId myDoubleNodeId = pumpRpmId;
-        /* Write a different double value */
-        UA_Double myDouble = 456.789;
-        UA_Variant myVar;
-        UA_Variant_init(&myVar);
-        UA_Variant_setScalar(&myVar, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
-        UA_Server_writeValue(server, myDoubleNodeId, myVar);
-        /* Set the status code of the value to an error code. The function
-         * UA_Server_write provides access to the raw service. The above
-         * UA_Server_writeValue is syntactic sugar for writing a specific node
-         * attribute with the write service. */
-        UA_WriteValue wv;
-        UA_WriteValue_init(&wv);
-        wv.nodeId = myDoubleNodeId;
-        wv.attributeId = UA_ATTRIBUTEID_VALUE;
-        wv.value.status = UA_STATUSCODE_BADNOTCONNECTED;
-        wv.value.hasStatus = true;
-        UA_Server_write(server, &wv);
-        /* Reset the variable to a good statuscode with a value */
-        wv.value.hasStatus = false;
-        wv.value.value = myVar;
-        wv.value.hasValue = true;
-        UA_Server_write(server, &wv);
-    }
-
-    //запись из клиента
-    if (true)
-    {
-        UA_NodeId myDoubleNodeId = pumpRpmId;
-        UA_Double myDouble = 321.777;
-        UA_Variant* myVariant = UA_Variant_new();
-        UA_Variant_setScalarCopy(myVariant, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
-        UA_Client_writeValueAttribute(client, myDoubleNodeId, myVariant);
-        UA_Variant_delete(myVariant);
-    }
-
-    browseAll();
-
-
-    return 0;
-}
-
-//--------------------В РАЗРАБОТКЕ--------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//--------------OLD and TEST------------------------------------------------------------
-
-
+*/
 
 
 static void addVariable(UA_Server* server)
