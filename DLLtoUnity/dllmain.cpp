@@ -52,10 +52,11 @@ public:
     //связи имя имя_атрибута -> nodeID
     std::map < std::string, UA_NodeId> VariableNode_NameID;
 };
-//связи имя объекта_имя ->  nodeID
+//связи имя объекта_имя ->  nodeID для создаваемых сервером объектов (для сервера)
 std::map < std::string, ObjectNodeVariables*> ObjectNodes;
 
-
+//связи имя объекта_имя ->  nodeID для прочитанных клиентом объектов (для клиента), см. OPC_UA_Client_Service_browse
+std::map < std::string, ObjectNodeVariables*> ClientObjectNodes;
 
 //функции общие
 // RegisterDebugCallback - регистрация callback'ов
@@ -73,6 +74,7 @@ std::map < std::string, ObjectNodeVariables*> ObjectNodes;
 
 
 //Про методы: например можно сделать метод - создать игрока передать туда имя и тип и в ответ получить ок или не ок, можно и в ответ имя получить
+// UA_NODEID_NUMERIC / UA_NODEID_STRING 0 - NAMESPACE NS0
 
 
 
@@ -84,7 +86,7 @@ std::map < std::string, ObjectNodeVariables*> ObjectNodes;
 //5. int OPC_ClientDelete() - выключение клиента
 //6. int OPC_ClientCallMethod (unsigned int NodeId, char* value) - вызов метода
 //7. int OPC_ClientSubscription(char* varname, double interval) - подписка на изменение значения переменной
-//8. int OPC_ClientGetAllNodesId() - читает всю структуру иерархии дерева с сервера для возможности писать не только в корневые объекты, возвращает число прочитанных узлов
+//8. int OPC_UA_Client_Service_browse() - читает всю структуру иерархии дерева с сервера для возможности писать не только в корневые объекты, возвращает число прочитанных узлов
 
 
 //сделать:
@@ -199,6 +201,9 @@ extern "C" __declspec(dllexport) int OPC_ServerCreate()
     UA_ServerConfig_setDefault(UA_Server_getConfig(server));
     UA_ServerConfig* config = UA_Server_getConfig(server);
     config->applicationDescription.applicationName =  UA_LOCALIZEDTEXT((char*)"en - US", (char*)"LContent OPC server");
+    config->applicationDescription.productUri = UA_STRING((char*)"https://LContent.ru");
+    //config->applicationDescription.applicationUri = UA_STRING((char*)"urn:unconfigured:application");
+    config->buildInfo.manufacturerName = UA_STRING((char*)"LContent.ru");
     config->verifyRequestTimestamp = UA_RULEHANDLING_ACCEPT;
     #ifdef UA_ENABLE_WEBSOCKET_SERVER
         UA_ServerConfig_addNetworkLayerWS(UA_Server_getConfig(server), 7681, 0, 0, NULL, NULL);
@@ -238,7 +243,7 @@ extern "C" __declspec(dllexport)  int OPC_ServerAddVariableDouble(char* objectSt
             UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
             oAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)objectName.c_str()); //(char*)"Pump (Manual)"
             UA_Server_addObjectNode(server, UA_NODEID_NULL, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES), UA_QUALIFIEDNAME(1, (char*)"Pump (Manual)"), UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE), oAttr, NULL, &ObjectNodeId);
-            //
+            //UA_NODEID_NUMERIC(1, 0)
             ObjectNodeVariables* newObjectNode = new ObjectNodeVariables;
             newObjectNode->nodeId = ObjectNodeId;
             ObjectNodes[objectName] = newObjectNode;
@@ -269,8 +274,8 @@ extern "C" __declspec(dllexport)  int OPC_ServerAddVariableDouble(char* objectSt
         attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
         attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
         //Add the variable node to the information model
-        UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, descriptionString);
-        UA_QualifiedName myDoubleName = UA_QUALIFIEDNAME(1, displayNameString);
+        UA_NodeId myIntegerNodeId = UA_NODEID_STRING(0, descriptionString);
+        UA_QualifiedName myDoubleName = UA_QUALIFIEDNAME(0, displayNameString);
         UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
         UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
         UA_Server_addVariableNode(server, myIntegerNodeId, parentNodeId, parentReferenceNodeId, myDoubleName, UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, NULL);
@@ -341,7 +346,7 @@ extern "C" __declspec(dllexport) double OPC_ServerReadValueDouble(char* objectSt
     }
     else
     {
-        myDoubleNodeId = UA_NODEID_STRING(1, descriptionString);
+        myDoubleNodeId = UA_NODEID_STRING(0, descriptionString);
     }
 
     UA_Variant out;
@@ -387,7 +392,7 @@ extern "C" __declspec(dllexport) int OPC_ClientConnect(char* url)
 //2. int OPC_ClientWriteValueDouble (description, value) //(char*)"the.answer", double
 extern "C" __declspec(dllexport) int OPC_ClientWriteValueDouble(char* description, double _value)
 {
-    UA_NodeId myDoubleNodeId = UA_NODEID_STRING(1, description);
+    UA_NodeId myDoubleNodeId = UA_NODEID_STRING(0, description);
 
     //Write a different double value
     UA_Double myDouble = _value;
@@ -414,7 +419,7 @@ extern "C" __declspec(dllexport) double OPC_ClientReadValueDouble(char* descript
     UA_Variant_init(&value);
 
     // NodeId of the variable holding the current time 
-    UA_NodeId myDoubleNodeId = UA_NODEID_STRING(1, description); //(char*)"the.answer"
+    UA_NodeId myDoubleNodeId = UA_NODEID_STRING(0, description); //(char*)"the.answer"
     UA_StatusCode retval = UA_Client_readValueAttribute(client, myDoubleNodeId, &value);
     if (retval == UA_STATUSCODE_GOOD && UA_Variant_hasScalarType(&value, &UA_TYPES[UA_TYPES_DOUBLE]))
     {
@@ -506,7 +511,7 @@ static void addHelloWorldMethod(UA_Server* server, unsigned int nodeID, char* na
     helloAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", displayName);  //3 (char*)"Hello World"
     helloAttr.executable = true;
     helloAttr.userExecutable = true;
-    UA_Server_addMethodNode(server, UA_NODEID_NUMERIC(1, nodeID),           //1 unsigned int //62541
+    UA_Server_addMethodNode(server, UA_NODEID_NUMERIC(0, nodeID),           //1 unsigned int //62541
         UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
         UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
         UA_QUALIFIEDNAME(1, name),                      //2      (char*)"hello world"
@@ -543,7 +548,7 @@ extern "C" __declspec(dllexport) int OPC_ServerCallMethod(unsigned int NodeId, c
     callMethodRequest.inputArgumentsSize = 1;
     callMethodRequest.inputArguments = inputArguments;
     callMethodRequest.objectId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
-    callMethodRequest.methodId = UA_NODEID_NUMERIC(1, NodeId);
+    callMethodRequest.methodId = UA_NODEID_NUMERIC(0, NodeId);
     UA_CallMethodResult response = UA_Server_call(server, &callMethodRequest);
        
     UA_CallMethodResult_clear(&response);
@@ -565,7 +570,7 @@ extern "C" __declspec(dllexport) int OPC_ClientCallMethod(unsigned int NodeId, c
     UA_Variant* output;
     //UA_StatusCode retval = UA_Client_call(client, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),UA_NODEID_NUMERIC(1, 62541), 1, &input, &outputSize, &output);  //62541 unsigned int 
 
-    UA_StatusCode retval = UA_Client_call(client, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_NUMERIC(1, NodeId), 1, &input, &outputSize, &output);
+    UA_StatusCode retval = UA_Client_call(client, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_NUMERIC(0, NodeId), 1, &input, &outputSize, &output);
     if (retval == UA_STATUSCODE_GOOD)
     {
         //printf("Method call was successful, and %lu returned values available.\n",      (unsigned long)outputSize);
@@ -626,7 +631,7 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* varna
         SendLog(L"Create subscription succeeded", 0);
     }
 
-    UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(UA_NODEID_STRING(1, varname));
+    UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(UA_NODEID_STRING(0, varname));
 
     UA_MonitoredItemCreateResult monResponse = UA_Client_MonitoredItems_createDataChange(client, response.subscriptionId, UA_TIMESTAMPSTORETURN_BOTH,monRequest, NULL, handler_TheAnswerChanged, NULL);
     
@@ -666,9 +671,175 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* varna
 
 
 //--------------------В РАЗРАБОТКЕ--------------------------------
-//tutorial_server_object.c
+
+
+
+
+void Client_Service_browse_recursive(UA_NodeId browse_node, bool subcall)
+{
+    UA_BrowseRequest bReq;
+    UA_BrowseRequest_init(&bReq);
+    bReq.requestedMaxReferencesPerNode = 0;
+    bReq.nodesToBrowse = UA_BrowseDescription_new();
+    bReq.nodesToBrowseSize = 1;
+    bReq.nodesToBrowse[0].nodeId = browse_node; // UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER); // browse objects folder
+    bReq.nodesToBrowse[0].resultMask = UA_BROWSERESULTMASK_ALL; // return everything
+    //bReq.nodesToBrowse[0].includeSubtypes = UA_TRUE;
+    //bReq.nodesToBrowse[0].referenceTypeId = UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT); //ТОЛЬКО МЕТОДЫ
+    //bReq.nodesToBrowse[0].referenceTypeId = UA_NODEID_NUMERIC(0, ); //ТОЛЬКО каталоги ..UA_NS0ID_ORGANIZES UA_NS0ID_FOLDERTYPE UA_NS0ID_HASCHILD UA_NS0ID_OBJECTNODE UA_NS0ID_HIERARCHICALREFERENCES
+    UA_BrowseResponse bResp = UA_Client_Service_browse(client, bReq);
+    //printf("%-9s %-16s %-16s %-16s\n", "NAMESPACE", "NODEID", "BROWSE NAME", "DISPLAY NAME");
+    SendLog(L"NAMESPACE, NODEID, BROWSE NAME, DISPLAY NAME", 0);
+    for (size_t i = 0; i < bResp.resultsSize; ++i)
+    {
+        for (size_t j = 0; j < bResp.results[i].referencesSize; ++j)
+        {
+            UA_ReferenceDescription* ref = &(bResp.results[i].references[j]);
+
+            //тип
+            if (ref->nodeClass == UA_NODECLASS_OBJECT)
+            {
+                SendLog(L"Group!!!!", 0);
+            }
+            if (ref->nodeClass == UA_NODECLASS_METHOD)
+            {
+                SendLog(L"Method!!!!", 0);
+            }
+                
+            //тут за идентификатор, т.е. чем определяется переменная - именем или строкой, может быть и так и так
+            if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_NUMERIC)
+            {
+                //printf("%-9u %-16u %-16.*s %-16.*s\n", ref->nodeId.nodeId.namespaceIndex,
+                //    ref->nodeId.nodeId.identifier.numeric, (int)ref->browseName.name.length,
+                //    ref->browseName.name.data, (int)ref->displayName.text.length,
+                //    ref->displayName.text.data);
+                UA_UInt16 a = ref->nodeId.nodeId.namespaceIndex;
+                UA_UInt32 b = ref->nodeId.nodeId.identifier.numeric;
+                int c = (int)ref->browseName.name.length;
+                UA_Byte* d = ref->browseName.name.data;
+                int e = (int)ref->displayName.text.length;
+                UA_Byte* f = ref->displayName.text.data;
+
+                {
+                    UA_UInt32 numeric_id = ref->nodeId.nodeId.identifier.numeric;
+
+                    char* convert = (char*)UA_malloc(sizeof(char) * ref->displayName.text.length + 1);
+                    memcpy(convert, ref->displayName.text.data, ref->displayName.text.length);
+                    convert[ref->displayName.text.length] = '\0';
+
+                    std::wstring sub = L"";
+                    if (subcall==false) sub = L"---->";
+
+                    std::wstringstream cls;
+                    cls << sub << convert << "=" << numeric_id;
+                    std::wstring displayName = cls.str();
+                    SendLog(displayName, 0);
+
+                    //ИСКЛЮЧИТЬ! BaseObjectType=58
+
+                    if (ref->nodeClass == UA_NODECLASS_OBJECT)
+                    {
+                        Client_Service_browse_recursive(ref->nodeId.nodeId, false);
+                    }
+
+                    //if (subcall==true) Client_Service_browse_recursive(ref->nodeId.nodeId, false);
+                    //
+                }
+            }
+            else if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_STRING)
+            {
+                //printf("%-9u %-16.*s %-16.*s %-16.*s\n", ref->nodeId.nodeId.namespaceIndex,
+                //    (int)ref->nodeId.nodeId.identifier.string.length,
+                //    ref->nodeId.nodeId.identifier.string.data,
+                //    (int)ref->browseName.name.length, ref->browseName.name.data,
+                //    (int)ref->displayName.text.length, ref->displayName.text.data);
+
+                char* convert = (char*)UA_malloc(sizeof(char) * ref->displayName.text.length + 1);
+                memcpy(convert, ref->displayName.text.data, ref->displayName.text.length);
+                convert[ref->displayName.text.length] = '\0';
+
+                char* convert1 = (char*)UA_malloc(sizeof(char) * (int)ref->nodeId.nodeId.identifier.string.length + 1);
+                memcpy(convert1, ref->nodeId.nodeId.identifier.string.data, (int)ref->nodeId.nodeId.identifier.string.length);
+                convert1[(int)ref->nodeId.nodeId.identifier.string.length] = '\0';
+
+                std::wstring sub = L"";
+                if (subcall == false) sub = L"---->";
+
+                std::wstringstream cls;
+                cls << sub  << convert << "=" << convert1;
+                std::wstring displayName = cls.str();
+                SendLog(displayName, 0)
+
+                    //ИСКЛЮЧИТЬ! BaseObjectType=58
+
+                if (ref->nodeClass == UA_NODECLASS_OBJECT)
+                {
+                    Client_Service_browse_recursive(ref->nodeId.nodeId, false);
+                }
+            }
+        }
+    }
+    UA_BrowseRequest_clear(&bReq);
+    UA_BrowseResponse_clear(&bResp);
+}
+
+
+
+
+//читает всю структуру иерархии дерева с сервера для возможности писать не только в корневые объекты, возвращает число прочитанных узлов
+extern "C" __declspec(dllexport)  int OPC_UA_Client_Service_browse()
+{
+    //чистим дерево связей
+    ClientObjectNodes.clear();
+    SendLog(L"Browsing nodes in objects folder", 0);
+
+    Client_Service_browse_recursive(UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), true); // browse objects folder);
+
+
+    
+
+    return 0;
+}
+
+
+
+
+//--------------------В РАЗРАБОТКЕ--------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//--------------OLD and TEST------------------------------------------------------------
+
+
+ /*
+ //tutorial_server_object.c
 //UA_NodeId pumpRpmId;
-static void manuallyDefinePump(UA_Server *server)
+static void manuallyDefinePump(UA_Server* server)
 {
     std::string pumpName = "Pump (Manual)";
 
@@ -691,7 +862,7 @@ static void manuallyDefinePump(UA_Server *server)
         std::string VariableName = "ManufacturerName";
         UA_NodeId VariableNodeId;
         UA_NodeId ObjectNodeId = ObjectNodes[pumpName]->nodeId;
-        
+
 
         UA_VariableAttributes mnAttr = UA_VariableAttributes_default;
         UA_String manufacturerName = UA_STRING((char*)"Pump King Ltd.");
@@ -753,71 +924,6 @@ static void manuallyDefinePump(UA_Server *server)
         ObjectNodes[pumpName]->VariableNode_NameID[VariableName] = VariableNodeId;
     }
 }
-
-
-
-
-
-//читает всю структуру иерархии дерева с сервера для возможности писать не только в корневые объекты, возвращает число прочитанных узлов
-extern "C" __declspec(dllexport)  int OPC_ClientGetAllNodesId()
-{
-    SendLog(L"Browsing nodes in objects folder", 0);
-
-    UA_BrowseRequest bReq;
-    UA_BrowseRequest_init(&bReq);
-    bReq.requestedMaxReferencesPerNode = 0;
-    bReq.nodesToBrowse = UA_BrowseDescription_new();
-    bReq.nodesToBrowseSize = 1;
-    bReq.nodesToBrowse[0].nodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER); // browse objects folder
-    bReq.nodesToBrowse[0].resultMask = UA_BROWSERESULTMASK_ALL; // return everything
-    UA_BrowseResponse bResp = UA_Client_Service_browse(client, bReq);
-    //printf("%-9s %-16s %-16s %-16s\n", "NAMESPACE", "NODEID", "BROWSE NAME", "DISPLAY NAME");
-    SendLog(L"NAMESPACE, NODEID, BROWSE NAME, DISPLAY NAME", 0);
-    for (size_t i = 0; i < bResp.resultsSize; ++i)
-    {
-        for (size_t j = 0; j < bResp.results[i].referencesSize; ++j)
-        {
-            UA_ReferenceDescription* ref = &(bResp.results[i].references[j]);
-            if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_NUMERIC)
-            {
-                //printf("%-9u %-16u %-16.*s %-16.*s\n", ref->nodeId.nodeId.namespaceIndex,
-                //    ref->nodeId.nodeId.identifier.numeric, (int)ref->browseName.name.length,
-                //    ref->browseName.name.data, (int)ref->displayName.text.length,
-                //    ref->displayName.text.data);
-                UA_UInt16 a = ref->nodeId.nodeId.namespaceIndex;
-                UA_UInt32 b = ref->nodeId.nodeId.identifier.numeric;
-                int c = (int)ref->browseName.name.length;
-                UA_Byte* d = ref->browseName.name.data;
-                int e = (int)ref->displayName.text.length;
-                UA_Byte* f = ref->displayName.text.data;
-
-                char* convert = (char*)UA_malloc(sizeof(char) * ref->displayName.text.length + 1);
-                memcpy(convert, ref->displayName.text.data, ref->displayName.text.length);
-                convert[ref->displayName.text.length] = '\0';
-                std::wstringstream cls;
-                cls << convert;
-                std::wstring displayName = cls.str();
-
-                SendLog(displayName, 0);
-            }
-            else if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_STRING)
-            {
-                printf("%-9u %-16.*s %-16.*s %-16.*s\n", ref->nodeId.nodeId.namespaceIndex,
-                    (int)ref->nodeId.nodeId.identifier.string.length,
-                    ref->nodeId.nodeId.identifier.string.data,
-                    (int)ref->browseName.name.length, ref->browseName.name.data,
-                    (int)ref->displayName.text.length, ref->displayName.text.data);
-            }
-        }
-    }
-    UA_BrowseRequest_clear(&bReq);
-    UA_BrowseResponse_clear(&bResp);
-
-    return 0;
-}
-
-
-
 extern "C" __declspec(dllexport)  int OPC_TestObjectPump()
 {
     manuallyDefinePump(server);
@@ -835,28 +941,28 @@ extern "C" __declspec(dllexport)  int OPC_TestObjectPump()
     if (false)
     {
         UA_NodeId myDoubleNodeId = pumpRpmId;
-        /* Write a different double value */
-        UA_Double myDouble = 456.789;
-        UA_Variant myVar;
-        UA_Variant_init(&myVar);
-        UA_Variant_setScalar(&myVar, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
-        UA_Server_writeValue(server, myDoubleNodeId, myVar);
-        /* Set the status code of the value to an error code. The function
-         * UA_Server_write provides access to the raw service. The above
-         * UA_Server_writeValue is syntactic sugar for writing a specific node
-         * attribute with the write service. */
-        UA_WriteValue wv;
-        UA_WriteValue_init(&wv);
-        wv.nodeId = myDoubleNodeId;
-        wv.attributeId = UA_ATTRIBUTEID_VALUE;
-        wv.value.status = UA_STATUSCODE_BADNOTCONNECTED;
-        wv.value.hasStatus = true;
-        UA_Server_write(server, &wv);
-        /* Reset the variable to a good statuscode with a value */
-        wv.value.hasStatus = false;
-        wv.value.value = myVar;
-        wv.value.hasValue = true;
-        UA_Server_write(server, &wv);
+        // Write a different double value 
+UA_Double myDouble = 456.789;
+UA_Variant myVar;
+UA_Variant_init(&myVar);
+UA_Variant_setScalar(&myVar, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+UA_Server_writeValue(server, myDoubleNodeId, myVar);
+// Set the status code of the value to an error code. The function
+ // UA_Server_write provides access to the raw service. The above
+ // UA_Server_writeValue is syntactic sugar for writing a specific node
+ // attribute with the write service. 
+UA_WriteValue wv;
+UA_WriteValue_init(&wv);
+wv.nodeId = myDoubleNodeId;
+wv.attributeId = UA_ATTRIBUTEID_VALUE;
+wv.value.status = UA_STATUSCODE_BADNOTCONNECTED;
+wv.value.hasStatus = true;
+UA_Server_write(server, &wv);
+// Reset the variable to a good statuscode with a value 
+wv.value.hasStatus = false;
+wv.value.value = myVar;
+wv.value.hasValue = true;
+UA_Server_write(server, &wv);
     }
 
     //запись из клиента
@@ -875,29 +981,10 @@ extern "C" __declspec(dllexport)  int OPC_TestObjectPump()
 
     return 0;
 }
+ 
+ */
+ 
 
-//--------------------В РАЗРАБОТКЕ--------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//--------------OLD and TEST------------------------------------------------------------
     //UA_Server_readObjectProperty
     //UA_Server_writeObjectProperty
 /*
@@ -1133,7 +1220,7 @@ static void addVariable(UA_Server* server)
     attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
 
     /* Add the variable node to the information model */
-    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"AAA");
+    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(0, (char*)"AAA");
     UA_QualifiedName myIntegerName = UA_QUALIFIEDNAME(1, (char*)"AAA");
     UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
     UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
@@ -1162,7 +1249,7 @@ static void addMatrixVariable(UA_Server* server)
     attr.value.arrayDimensions = arrayDims;
     attr.value.arrayDimensionsSize = 2;
 
-    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"double.matrix");
+    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(0, (char*)"double.matrix");
     UA_QualifiedName myIntegerName = UA_QUALIFIEDNAME(1, (char*)"doublematrix");
     UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
     UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
@@ -1177,7 +1264,7 @@ static void addMatrixVariable(UA_Server* server)
 //implementation that can also be reached over the network by an OPC UA client.
 static void writeVariable(UA_Server* server, int value) 
 {
-    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"AAA");
+    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(0, (char*)"AAA");
 
     /* Write a different integer value */
     UA_Int32 myInteger = value;
@@ -1258,7 +1345,7 @@ extern "C" __declspec(dllexport) int testServerWrite(int a)
 
 extern "C" __declspec(dllexport) int testServerRead()
 {
-    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, (char*)"AAA");
+    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(0, (char*)"AAA");
     UA_Variant out;
     UA_Variant_init(&out);
     UA_Server_readValue(server, myIntegerNodeId, &out);
@@ -1295,7 +1382,7 @@ extern "C" __declspec(dllexport) double testClient(char* description)
     UA_Variant_init(&value);
 
     // NodeId of the variable holding the current time 
-    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(1, description);//(char*)"AAA"
+    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(0, description);//(char*)"AAA"
     retval = UA_Client_readValueAttribute(client2, myIntegerNodeId, &value);
 
     
@@ -1310,7 +1397,7 @@ extern "C" __declspec(dllexport) double testClient(char* description)
 
 
     {
-        UA_NodeId myDoubleNodeId = UA_NODEID_STRING(1, description);
+        UA_NodeId myDoubleNodeId = UA_NODEID_STRING(0, description);
 
         //Write a different double value
         UA_Double myDouble = 125;
