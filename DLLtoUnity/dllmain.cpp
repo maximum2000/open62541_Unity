@@ -647,7 +647,7 @@ static void handler_TheAnswerChanged(UA_Client* client, UA_UInt32 subId, void* s
 extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* object, char* varname, double interval)
 {
     // The first publish request should return the initial value of the variable
-    UA_Client_run_iterate(client, 1000);
+    //UA_Client_run_iterate(client, 1000);
 
     SendLog(L"OPC_ClientSubscription", 0);
 
