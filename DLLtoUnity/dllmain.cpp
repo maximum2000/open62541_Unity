@@ -644,8 +644,11 @@ static void handler_TheAnswerChanged(UA_Client* client, UA_UInt32 subId, void* s
 }
 #endif
 
-extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* varname, double interval)
+extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* object, char* varname, double interval)
 {
+    // The first publish request should return the initial value of the variable
+    UA_Client_run_iterate(client, 1000);
+
     SendLog(L"OPC_ClientSubscription", 0);
 
     // Create a subscription
@@ -660,7 +663,28 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* varna
         SendLog(L"Create subscription succeeded", 0);
     }
 
-    UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(UA_NODEID_STRING(0, varname));
+
+
+
+    UA_NodeId myDoubleNodeId;
+    std::string objectName(object);
+    std::string attributeName(varname);
+
+    //если это атрибут объекта
+    if (objectName != "")
+    {
+        myDoubleNodeId = ClientObjectNodes[objectName]->VariableNode_NameID[attributeName];
+    }
+    else
+    {
+        myDoubleNodeId = UA_NODEID_STRING(0, varname);
+    }
+
+
+
+
+    //UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(UA_NODEID_STRING(0, varname));
+    UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(myDoubleNodeId);
 
     UA_MonitoredItemCreateResult monResponse = UA_Client_MonitoredItems_createDataChange(client, response.subscriptionId, UA_TIMESTAMPSTORETURN_BOTH,monRequest, NULL, handler_TheAnswerChanged, NULL);
     
