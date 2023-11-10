@@ -390,9 +390,23 @@ extern "C" __declspec(dllexport) int OPC_ClientConnect(char* url)
 }
 
 //2. int OPC_ClientWriteValueDouble (description, value) //(char*)"the.answer", double
-extern "C" __declspec(dllexport) int OPC_ClientWriteValueDouble(char* description, double _value)
+extern "C" __declspec(dllexport) int OPC_ClientWriteValueDouble(char* object2, char* description, double _value)
 {
-    UA_NodeId myDoubleNodeId = UA_NODEID_STRING(0, description);
+    UA_NodeId myDoubleNodeId;
+    std::string objectName(object2);
+    std::string attributeName(description);
+
+    //если это атрибут объекта
+    if (objectName != "")
+    {
+        myDoubleNodeId = ClientObjectNodes[objectName]->VariableNode_NameID[attributeName];
+    }
+    else
+    {
+        myDoubleNodeId = UA_NODEID_STRING(0, description);
+    }
+
+    //UA_NodeId myDoubleNodeId = UA_NODEID_STRING(0, description);
 
     //Write a different double value
     UA_Double myDouble = _value;
@@ -411,15 +425,30 @@ extern "C" __declspec(dllexport) int OPC_ClientWriteValueDouble(char* descriptio
 }
 
 //3. double OPC_ClientReadValueDouble (description) //(char*)"the.answer"
-extern "C" __declspec(dllexport) double OPC_ClientReadValueDouble(char* description)
+extern "C" __declspec(dllexport) double OPC_ClientReadValueDouble(char* object2, char* description)
 {
+    UA_NodeId myDoubleNodeId;
+    std::string objectName(object2);
+    std::string attributeName(description);
+
+    //если это атрибут объекта
+    if (objectName != "")
+    {
+        myDoubleNodeId = ClientObjectNodes[objectName]->VariableNode_NameID[attributeName];
+    }
+    else
+    {
+        myDoubleNodeId = UA_NODEID_STRING(0, description);
+    }
+
+
     // Read the value attribute of the node. UA_Client_readValueAttribute is a
     // wrapper for the raw read service available as UA_Client_Service_read. 
     UA_Variant value; // Variants can hold scalar values and arrays of any type 
     UA_Variant_init(&value);
 
     // NodeId of the variable holding the current time 
-    UA_NodeId myDoubleNodeId = UA_NODEID_STRING(0, description); //(char*)"the.answer"
+    //UA_NodeId myDoubleNodeId = UA_NODEID_STRING(0, description); //(char*)"the.answer"
     UA_StatusCode retval = UA_Client_readValueAttribute(client, myDoubleNodeId, &value);
     if (retval == UA_STATUSCODE_GOOD && UA_Variant_hasScalarType(&value, &UA_TYPES[UA_TYPES_DOUBLE]))
     {
@@ -675,7 +704,7 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* varna
 
 
 
-void Client_Service_browse_recursive(UA_NodeId browse_node, bool subcall)
+void Client_Service_browse_recursive(UA_NodeId browse_node, std::string ParentName)
 {
     UA_BrowseRequest bReq;
     UA_BrowseRequest_init(&bReq);
@@ -728,22 +757,39 @@ void Client_Service_browse_recursive(UA_NodeId browse_node, bool subcall)
                     convert[ref->displayName.text.length] = '\0';
 
                     std::wstring sub = L"";
-                    if (subcall==false) sub = L"---->";
+                    if (ParentName != "") sub = L"---->";
 
                     std::wstringstream cls;
                     cls << sub << convert << "=" << numeric_id;
                     std::wstring displayName = cls.str();
-                    SendLog(displayName, 0);
 
                     //ИСКЛЮЧИТЬ! BaseObjectType=58
+                    std::stringstream cls2;
+                    cls2 << convert;
+                    std::string flushName = cls2.str();
+
+                    if ((flushName == "BaseObjectType") || (numeric_id == 58) || (flushName == "Server")) continue;
+
+                    SendLog(displayName, 0);
+                    if (ParentName != "")
+                    {
+                        //если этого объекта еще нет - создаем и запоминаем
+                        if (ClientObjectNodes.count(ParentName) == 0)
+                        {
+                            ObjectNodeVariables* newObjectNode = new ObjectNodeVariables;
+                            newObjectNode->nodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
+                            ClientObjectNodes[ParentName] = newObjectNode;
+                        }
+                        //теперь создаем атрибут в объекте
+                        ClientObjectNodes[ParentName]->VariableNode_NameID[flushName] = UA_NODEID_NUMERIC(0,numeric_id);
+                    }
+
 
                     if (ref->nodeClass == UA_NODECLASS_OBJECT)
                     {
-                        Client_Service_browse_recursive(ref->nodeId.nodeId, false);
+                        std::string parentname(convert);
+                        Client_Service_browse_recursive(ref->nodeId.nodeId, parentname);
                     }
-
-                    //if (subcall==true) Client_Service_browse_recursive(ref->nodeId.nodeId, false);
-                    //
                 }
             }
             else if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_STRING)
@@ -763,18 +809,41 @@ void Client_Service_browse_recursive(UA_NodeId browse_node, bool subcall)
                 convert1[(int)ref->nodeId.nodeId.identifier.string.length] = '\0';
 
                 std::wstring sub = L"";
-                if (subcall == false) sub = L"---->";
+                if (ParentName != "") sub = L"---->";
 
                 std::wstringstream cls;
                 cls << sub  << convert << "=" << convert1;
                 std::wstring displayName = cls.str();
-                SendLog(displayName, 0)
 
-                    //ИСКЛЮЧИТЬ! BaseObjectType=58
+                std::stringstream cls2;
+                cls2 << convert;
+                std::string flushName = cls2.str();
+
+                std::stringstream cls3;
+                cls3 << convert1;
+                std::string flushName2 = cls3.str();
+
+                //ИСКЛЮЧИТЬ! BaseObjectType=58
+                if ((flushName == "BaseObjectType")|| (flushName2 == "58") || (flushName == "Server")) continue;
+                SendLog(displayName, 0);
+
+                if (ParentName != "")
+                {
+                    //если этого объекта еще нет - создаем и запоминаем
+                    if (ClientObjectNodes.count(ParentName) == 0)
+                    {
+                        ObjectNodeVariables* newObjectNode = new ObjectNodeVariables;
+                        newObjectNode->nodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
+                        ClientObjectNodes[ParentName] = newObjectNode;
+                    }
+                    //теперь создаем атрибут в объекте
+                    ClientObjectNodes[ParentName]->VariableNode_NameID[flushName] = UA_NODEID_STRING(0, (char*)flushName.c_str());
+                }
 
                 if (ref->nodeClass == UA_NODECLASS_OBJECT)
                 {
-                    Client_Service_browse_recursive(ref->nodeId.nodeId, false);
+                    std::string parentname(convert);
+                    Client_Service_browse_recursive(ref->nodeId.nodeId, parentname);
                 }
             }
         }
@@ -793,9 +862,9 @@ extern "C" __declspec(dllexport)  int OPC_UA_Client_Service_browse()
     ClientObjectNodes.clear();
     SendLog(L"Browsing nodes in objects folder", 0);
 
-    Client_Service_browse_recursive(UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), true); // browse objects folder);
+    Client_Service_browse_recursive(UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), ""); // browse objects folder);
 
-
+    //(L"ClientObjectNodes.count = " + std::wstring(ClientObjectNodes.size()), 0);
     
 
     return 0;
