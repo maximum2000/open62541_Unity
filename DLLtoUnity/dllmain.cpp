@@ -365,6 +365,15 @@ extern "C" __declspec(dllexport) int OPC_ServerShutdown()
     UA_Server_delete(server);
     UA_StatusCode retval = UA_Server_run_shutdown(server);
     return retval == UA_STATUSCODE_GOOD ? EXIT_SUCCESS : EXIT_FAILURE;
+
+    //UA_Server_run_shutdown
+    //UA_Server_delete(server);
+    //This is to shut down the network before you delete it.  
+    //UA_Job* jobs;
+    //nl.getJobs(&nl, &jobs, 100);
+    //nl.stop(&nl, &jobs);
+    ////now you can delete the network layer.
+    //nl.deleteMembers(&nl);
 }
 
 
