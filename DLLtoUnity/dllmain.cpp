@@ -92,7 +92,12 @@ std::map < std::string, ObjectNodeVariables*> ClientObjectNodes;
 
 
 //сделать:
-//tutorial_server_object - объектыи инстансы                                                                    +-
+//!!!!
+//1. ПОДПИСКА >1 ПЕРЕМЕННЫХ НЕ  РАБОТАЕТ, нужно подписывать сразу на несколько за один вызов на 1 callback 
+    //(open62541/tests/client/check_client_subscriptions.c)
+    //https://github.com/open62541/open62541/issues/2094
+    //!!!
+//2. tutorial_server_object - объектыи инстансы                                                                    +-
 
  
     
