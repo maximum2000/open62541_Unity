@@ -68,9 +68,11 @@ std::map < std::string, ObjectNodeVariables*> ClientObjectNodes;
 //3. int OPC_ServerAddVariableDouble ( objectname, description, displayName) // (char*)"the.answer", (char*)"the answer" - добавление переменной
 //4. int OPC_ServerWriteValueDouble (objectname, description, value) //(char*)"the.answer", double - запись значения переменной
 //5. double OPC_ServerReadValueDouble (objectname, description) //(char*)"the.answer" - чтение переменной
-//6. int OPC_ServerShutdown - выключение сервера 
-//7. int OPC_ServerCreateMethod(unsigned int nodeID, char* name, char* displayName, char* description) - создание метода и обработчик метода
-//8. int OPC_ServerCallMethod(unsigned int NodeId, char* value)  - Вызов метода  из сервера 
+//6. int OPC_ServerWriteValueString (objectname, description, value) 
+//7. double OPC_ServerReadValueString (objectname, description) 
+//8. int OPC_ServerShutdown - выключение сервера 
+//9. int OPC_ServerCreateMethod(unsigned int nodeID, char* name, char* displayName, char* description) - создание метода и обработчик метода
+//10. int OPC_ServerCallMethod(unsigned int NodeId, char* value)  - Вызов метода  из сервера 
 
 
 //Про методы: например можно сделать метод - создать игрока передать туда имя и тип и в ответ получить ок или не ок, можно и в ответ имя получить
@@ -228,10 +230,13 @@ extern "C" __declspec(dllexport) int OPC_ServerUpdate()
     return 0;
 }
 
-//3. int OPC_ServerAddVariableDouble (description, displayName) // (char*)"the.answer", (char*)"the answer"
-extern "C" __declspec(dllexport)  int OPC_ServerAddVariableDouble(char* objectString, char* descriptionString, char* displayNameString)
+//3. int OPC_ServerAddVariable (description, displayName) // (char*)"the.answer", (char*)"the answer"
+//type==0 - double
+//type==1 - string
+extern "C" __declspec(dllexport)  int OPC_ServerAddVariable(char* objectString, char* descriptionString, char* displayNameString, int type)
 {
     std::string objectName(objectString);
+    std::string browseObjectName(objectString);
 
     //если это атрибут объекта
     if (objectName!="")
@@ -242,7 +247,7 @@ extern "C" __declspec(dllexport)  int OPC_ServerAddVariableDouble(char* objectSt
             UA_NodeId ObjectNodeId; // get the nodeid assigned by the server
             UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
             oAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)objectName.c_str()); //(char*)"Pump (Manual)"
-            UA_Server_addObjectNode(server, UA_NODEID_NULL, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES), UA_QUALIFIEDNAME(1, (char*)"Pump (Manual)"), UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE), oAttr, NULL, &ObjectNodeId);
+            UA_Server_addObjectNode(server, UA_NODEID_NULL, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES), UA_QUALIFIEDNAME(1, (char*)browseObjectName.c_str()), UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE), oAttr, NULL, &ObjectNodeId);
             //UA_NODEID_NUMERIC(1, 0)
             ObjectNodeVariables* newObjectNode = new ObjectNodeVariables;
             newObjectNode->nodeId = ObjectNodeId;
@@ -253,11 +258,21 @@ extern "C" __declspec(dllexport)  int OPC_ServerAddVariableDouble(char* objectSt
         std::string VariableName(descriptionString);
         UA_NodeId VariableNodeId;
         UA_VariableAttributes attr = UA_VariableAttributes_default;
-        UA_Double myDouble = 0;
-        UA_Variant_setScalar(&attr.value, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+        if (type == 0)
+        {
+            UA_Double myDouble = 0;
+            UA_Variant_setScalar(&attr.value, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+            attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+        }
+        else
+        {
+            UA_String stringValue = UA_STRING((char*)"");
+            UA_Variant_setScalar(&attr.value, &stringValue, &UA_TYPES[UA_TYPES_STRING]);
+            attr.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+        }
         attr.description = UA_LOCALIZEDTEXT((char*)"en - US", (char*)VariableName.c_str());
         attr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)VariableName.c_str()); //(char*)"MotorRPM"
-        attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+        
         attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
         UA_Server_addVariableNode(server, UA_NODEID_NULL, ObjectNodeId, UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT), UA_QUALIFIEDNAME(1, (char*)VariableName.c_str()), UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, &VariableNodeId);
         ObjectNodes[objectName]->VariableNode_NameID[VariableName] = VariableNodeId;
@@ -267,8 +282,16 @@ extern "C" __declspec(dllexport)  int OPC_ServerAddVariableDouble(char* objectSt
     {
         //просто создаем переменную в корне        
         UA_VariableAttributes attr = UA_VariableAttributes_default;
-        UA_Double myDouble = 0;
-        UA_Variant_setScalar(&attr.value, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+        if (type == 0)
+        {
+            UA_Double myDouble = 0;
+            UA_Variant_setScalar(&attr.value, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+        }
+        else
+        {
+            UA_String stringValue = UA_STRING((char*)"");
+            UA_Variant_setScalar(&attr.value, &stringValue, &UA_TYPES[UA_TYPES_STRING]);
+        }
         attr.description = UA_LOCALIZEDTEXT((char*)"en - US", descriptionString);   //(char*)"the.answer"
         attr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", displayNameString);     //(char*)"the answer"
         attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
@@ -358,7 +381,92 @@ extern "C" __declspec(dllexport) double OPC_ServerReadValueDouble(char* objectSt
     return value;
 }
 
-//6. int OPC_ServerShutdown
+
+
+//6. int OPC_ServerWriteValueString (objectname, description, value) 
+extern "C" __declspec(dllexport)  int OPC_ServerWriteValueString(char* objectString, char* descriptionString, char* value)
+{
+    UA_NodeId myDoubleNodeId;
+    std::string objectName(objectString);
+    std::string attributeName(descriptionString);
+    std::string value2(value);
+
+    //если это атрибут объекта
+    if (objectName != "")
+    {
+        myDoubleNodeId = ObjectNodes[objectName]->VariableNode_NameID[attributeName];
+    }
+    else
+    {
+        myDoubleNodeId = UA_NODEID_STRING(1, descriptionString);
+    }
+
+    UA_String stringValue = UA_STRING((char*)value);
+    UA_Variant myVar;
+    UA_Variant_init(&myVar);
+    UA_Variant_setScalar(&myVar, &stringValue, &UA_TYPES[UA_TYPES_STRING]);
+    UA_Server_writeValue(server, myDoubleNodeId, myVar);
+
+    UA_WriteValue wv;
+    UA_WriteValue_init(&wv);
+    wv.nodeId = myDoubleNodeId;
+    wv.attributeId = UA_ATTRIBUTEID_VALUE;
+    wv.value.status = UA_STATUSCODE_BADNOTCONNECTED;
+    wv.value.hasStatus = true;
+    UA_Server_write(server, &wv);
+
+    wv.value.hasStatus = false;
+    wv.value.value = myVar;
+    wv.value.hasValue = true;
+    UA_Server_write(server, &wv);
+
+    return 0;
+}
+
+
+//7. double OPC_ServerReadValueString (objectname, description) 
+extern "C" __declspec(dllexport) int OPC_ServerReadValueString(char* returnString, int returnStringLength, char* objectString, char* descriptionString)
+{
+    UA_NodeId myDoubleNodeId;
+    std::string objectName(objectString);
+    std::string attributeName(descriptionString);
+
+    //если это атрибут объекта
+    if (objectName != "")
+    {
+        myDoubleNodeId = ObjectNodes[objectName]->VariableNode_NameID[attributeName];
+    }
+    else
+    {
+        myDoubleNodeId = UA_NODEID_STRING(0, descriptionString);
+    }
+
+    UA_Variant out;
+    UA_Variant_init(&out);
+    UA_Server_readValue(server, myDoubleNodeId, &out);
+    //double value = *(UA_Double*)out.data;
+
+    UA_String uaString = *(UA_String*)out.data;
+
+    char* convert = (char*)UA_malloc(sizeof(char) * uaString.length + 1);
+    memcpy(convert, uaString.data, uaString.length);
+    convert[uaString.length] = '\0';
+
+    std::stringstream cls2;
+    cls2 << convert;
+    std::string svalue = cls2.str();
+
+    //пишем в специальную переменну на сторону c#
+    strcpy_s(returnString, returnStringLength, svalue.c_str());
+    
+    UA_Variant_clear(&out);
+    
+    return 0;
+}
+
+
+
+//8. int OPC_ServerShutdown
 extern "C" __declspec(dllexport) int OPC_ServerShutdown()
 {
     SendLog(L"debug DLL:OPC_ServerShutdown... ", 0);
@@ -672,9 +780,6 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* objec
         SendLog(L"Create subscription succeeded", 0);
     }
 
-
-
-
     UA_NodeId myDoubleNodeId;
     std::string objectName(object);
     std::string attributeName(varname);
@@ -688,9 +793,6 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* objec
     {
         myDoubleNodeId = UA_NODEID_STRING(0, varname);
     }
-
-
-
 
     //UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(UA_NODEID_STRING(0, varname));
     UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(myDoubleNodeId);
@@ -707,7 +809,6 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* objec
         SendLog(L"Monitoring .. false", 0);
     }
 
-
     // The first publish request should return the initial value of the variable
     UA_Client_run_iterate(client, 1000);
 
@@ -723,19 +824,7 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* objec
 
 
 
-
-
-
-
-
-
-
-
-
-//--------------------В РАЗРАБОТКЕ--------------------------------
-
-
-
+//--------------------------------------------Чтение структуры------------------------------------------------------------------
 
 void Client_Service_browse_recursive(UA_NodeId browse_node, std::string ParentName)
 {
@@ -885,9 +974,6 @@ void Client_Service_browse_recursive(UA_NodeId browse_node, std::string ParentNa
     UA_BrowseResponse_clear(&bResp);
 }
 
-
-
-
 //читает всю структуру иерархии дерева с сервера для возможности писать не только в корневые объекты, возвращает число прочитанных узлов
 extern "C" __declspec(dllexport)  int OPC_UA_Client_Service_browse()
 {
@@ -903,10 +989,10 @@ extern "C" __declspec(dllexport)  int OPC_UA_Client_Service_browse()
     return 0;
 }
 
+//---------------------------------------------------------------------------------------------------------------------------------------
 
 
 
-//--------------------В РАЗРАБОТКЕ--------------------------------
 
 
 
