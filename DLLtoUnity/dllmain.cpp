@@ -825,7 +825,144 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* objec
     //UA_Array_delete(filter.selectClauses, nSelectClauses, &UA_TYPES[UA_TYPES_SIMPLEATTRIBUTEOPERAND]);
 }
 
+
+
 //----------------------------------------подписка на мониторинг переменной и события------------------------------------------------
+
+
+
+
+
+
+
+/////////////
+
+extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription2(char* object, char* varname1, char* varname2, double interval)
+{
+    // The first publish request should return the initial value of the variable
+    //UA_Client_run_iterate(client, 1000);
+
+    SendLog(L"OPC_ClientSubscription2", 0);
+
+    // Create a subscription
+    UA_CreateSubscriptionRequest request = UA_CreateSubscriptionRequest_default();
+    request.requestedPublishingInterval = interval;
+    UA_CreateSubscriptionResponse response = UA_Client_Subscriptions_create(client, request, NULL, NULL, NULL);
+
+    UA_UInt32 subId = response.subscriptionId;
+    if (response.responseHeader.serviceResult == UA_STATUSCODE_GOOD)
+    {
+        //printf("Create subscription succeeded, id %u\n", subId);
+        SendLog(L"Create subscription succeeded", 0);
+    }
+
+
+    UA_MonitoredItemCreateRequest items[2];
+    UA_UInt32 newMonitoredItemIds[2];
+    UA_Client_DataChangeNotificationCallback callbacks[2];
+    UA_Client_DeleteMonitoredItemCallback deleteCallbacks[2];
+    void* contexts[2];
+
+    UA_NodeId myDoubleNodeId1;
+    {
+        std::string objectName(object);
+        std::string attributeName(varname1);
+
+        //если это атрибут объекта
+        if (objectName != "")
+        {
+            myDoubleNodeId1 = ClientObjectNodes[objectName]->VariableNode_NameID[attributeName];
+        }
+        else
+        {
+            myDoubleNodeId1 = UA_NODEID_STRING(0, varname1);
+        }
+    }
+    UA_NodeId myDoubleNodeId2;
+    {
+        std::string objectName(object);
+        std::string attributeName(varname2);
+
+        //если это атрибут объекта
+        if (objectName != "")
+        {
+            myDoubleNodeId2 = ClientObjectNodes[objectName]->VariableNode_NameID[attributeName];
+        }
+        else
+        {
+            myDoubleNodeId2 = UA_NODEID_STRING(0, varname2);
+        }
+    }
+
+
+    //1
+    items[0] = UA_MonitoredItemCreateRequest_default(myDoubleNodeId1); 
+    callbacks[0] = handler_TheAnswerChanged;
+    contexts[0] = NULL;
+    deleteCallbacks[0] = NULL;
+
+    //2
+    items[1] = UA_MonitoredItemCreateRequest_default(myDoubleNodeId2);
+    callbacks[1] = handler_TheAnswerChanged;
+    contexts[1] = NULL;
+    deleteCallbacks[1] = NULL;
+
+
+    UA_CreateMonitoredItemsRequest createRequest;
+    UA_CreateMonitoredItemsRequest_init(&createRequest);
+    createRequest.subscriptionId = subId;
+    createRequest.timestampsToReturn = UA_TIMESTAMPSTORETURN_BOTH;
+    createRequest.itemsToCreate = items;
+    createRequest.itemsToCreateSize = 2;
+    UA_CreateMonitoredItemsResponse createResponse = UA_Client_MonitoredItems_createDataChanges(client, createRequest, contexts, callbacks, deleteCallbacks);
+
+    if (createResponse.responseHeader.serviceResult == UA_STATUSCODE_GOOD)
+    {
+        SendLog(L"ok1", 0);
+    }
+    if (createResponse.results[0].statusCode == UA_STATUSCODE_GOOD)
+    {
+        SendLog(L"ok2", 0);
+    }
+    if (createResponse.results[1].statusCode == UA_STATUSCODE_GOOD)
+    {
+        SendLog(L"ok3", 0);
+    }
+   
+    
+    // The first publish request should return the initial value of the variable
+    UA_Client_run_iterate(client, 1000);
+
+
+    newMonitoredItemIds[0] = createResponse.results[0].monitoredItemId;
+    newMonitoredItemIds[1] = createResponse.results[1].monitoredItemId;
+
+    std::wstringstream ss1;
+    ss1 << newMonitoredItemIds[0];
+    std::wstring str1 = ss1.str();
+
+    std::wstringstream ss2;
+    ss2 << newMonitoredItemIds[1];
+    std::wstring str2 = ss2.str();
+
+    SendLog(L"OPC_ClientSubscription2-1=" + str1, 0);
+    SendLog(L"OPC_ClientSubscription2-2=" + str2,  0);
+
+    UA_CreateMonitoredItemsResponse_deleteMembers(&createResponse);
+
+   
+
+
+    return 0;
+}
+
+
+//////////////////
+
+
+
+
+
 
 
 
