@@ -763,7 +763,7 @@ extern "C" __declspec(dllexport) int OPC_ClientCallMethod(unsigned int NodeId, c
 #ifdef UA_ENABLE_SUBSCRIPTIONS
 static void handler_TheAnswerChanged(UA_Client* client, UA_UInt32 subId, void* subContext, UA_UInt32 monId, void* monContext, UA_DataValue* value) 
 {
-    SendLog(L"Monitoring .. handler_TheAnswerChanged", 0);
+    //SendLog(L"Monitoring .. handler_TheAnswerChanged", 0);
 
     if (allRegisteredSubscription.count(monId) > 0)
     {
@@ -778,7 +778,7 @@ static void handler_TheAnswerChanged(UA_Client* client, UA_UInt32 subId, void* s
                 std::wstring woname(oname.begin(), oname.end());
                 std::wstring wvname(vname.begin(), vname.end());
                 SendValueChange(woname, wvname,  monId, severity);
-                SendLog(L"Notification1 double", 0);
+                //SendLog(L"Notification1 double", 0);
             }
             else if (UA_Variant_hasScalarType(&value->value, &UA_TYPES[UA_TYPES_LOCALIZEDTEXT]))
             {
@@ -889,27 +889,30 @@ extern "C" __declspec(dllexport) int OPC_ClientSubscriptions(double interval)
 
     if (createResponse.responseHeader.serviceResult == UA_STATUSCODE_GOOD)
     {
-        SendLog(L"ok1", 0);
+        SendLog(L"OPC_ClientSubscriptions..ok", 0);
     }
     if (createResponse.results[0].statusCode == UA_STATUSCODE_GOOD)
     {
-        SendLog(L"ok2", 0);
+        //SendLog(L"ok2", 0);
     }
 
    
     
     // The first publish request should return the initial value of the variable
-    UA_Client_run_iterate(client, 1000);
+    //UA_Client_run_iterate(client, 1000);
 
     for (int i = 0; i < count; i++)
     {
         newMonitoredItemIds[i] = createResponse.results[i].monitoredItemId;
         std::wstringstream ss1;
-        ss1 << L"OPC_ClientSubscription->" << allClientSubscription[i]->objectname.c_str() << "*" << allClientSubscription[i]->variablename.c_str() << "=" << newMonitoredItemIds[i];
+        ss1 << L"OPC_ClientSubscription*" << allClientSubscription[i]->objectname.c_str() << "*" << allClientSubscription[i]->variablename.c_str() << "=" << newMonitoredItemIds[i];
         std::wstring str1 = ss1.str();
         SendLog(str1, 0);
         allRegisteredSubscription[newMonitoredItemIds[i]] = allClientSubscription[i];
     }
+
+    // The first publish request should return the initial value of the variable
+    UA_Client_run_iterate(client, 1000);
     
 
     UA_CreateMonitoredItemsResponse_deleteMembers(&createResponse);
