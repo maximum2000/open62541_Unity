@@ -12,6 +12,7 @@ email                : Maxim.Gammer@yandex.ru
 #include <string>
 #include <sstream>
 #include <map>
+#include <vector>
 
 //server
 #include <open62541/client_config_default.h>
@@ -57,6 +58,17 @@ std::map < std::string, ObjectNodeVariables*> ObjectNodes;
 
 //связи имя объекта_имя ->  nodeID для прочитанных клиентом объектов (для клиента), см. OPC_UA_Client_Service_browse
 std::map < std::string, ObjectNodeVariables*> ClientObjectNodes;
+
+class SubscriptionElementClass
+{
+public:
+    std::string objectname = "";
+    std::string variablename = "";
+    double interval = 1000;
+};
+std::vector <SubscriptionElementClass*> allClientSubscription;
+//unsigned int monID, 
+std::map< unsigned int, SubscriptionElementClass*> allRegisteredSubscription;
 
 //функции общие
 // RegisterDebugCallback - регистрация callback'ов
@@ -175,7 +187,7 @@ void SendMethodCall(const std::wstring& str, const unsigned int& nodeid)
 // Call this function from a Untiy script
 extern "C"
 {
-    typedef void(*ValueChangeCallback)(unsigned int monID, double value);
+    typedef void(*ValueChangeCallback)(const char* message1, int size1, const char* message2, int size2,  unsigned int monID, double value);
     static ValueChangeCallback callbackValueChangeFunction = nullptr;
     __declspec(dllexport) void RegisterValueChangeCallback(ValueChangeCallback callback);
 }
@@ -184,11 +196,16 @@ void RegisterValueChangeCallback(ValueChangeCallback callback)
     callbackValueChangeFunction = callback;
 }
 //nothrow
-void SendValueChange(const unsigned int& monID, const double& value)
+
+void SendValueChange(const std::wstring& strObj, const std::wstring& strVar, const unsigned int& monID, const double& value)
 {
+    std::string s1(strObj.begin(), strObj.end());
+    const char* tmsg1 = s1.c_str();
+    std::string s2(strVar.begin(), strVar.end());
+    const char* tmsg2 = s2.c_str();
     if (callbackValueChangeFunction != nullptr)
     {
-        callbackValueChangeFunction((unsigned int)monID, (double)value);
+        callbackValueChangeFunction(tmsg1, (int)strlen(tmsg1), tmsg2, (int)strlen(tmsg2), (unsigned int) monID, (double)value);
     }
 }
 //SendValueChange(1000, 3.141516);
@@ -748,82 +765,39 @@ static void handler_TheAnswerChanged(UA_Client* client, UA_UInt32 subId, void* s
 {
     SendLog(L"Monitoring .. handler_TheAnswerChanged", 0);
 
-    if (value->hasValue == true)
+    if (allRegisteredSubscription.count(monId) > 0)
     {
-        if (UA_Variant_hasScalarType(&value->value, &UA_TYPES[UA_TYPES_DOUBLE]))
+        if (value->hasValue == true)
         {
-            UA_Double severity = *(UA_Double*)value->value.data;
-            SendValueChange(monId, severity);
-            SendLog(L"Notification1 double", 0);
+            if (UA_Variant_hasScalarType(&value->value, &UA_TYPES[UA_TYPES_DOUBLE]))
+            {
+                UA_Double severity = *(UA_Double*)value->value.data;
+                std::string oname = allRegisteredSubscription[monId]->objectname;
+                std::string vname = allRegisteredSubscription[monId]->variablename;
+
+                std::wstring woname(oname.begin(), oname.end());
+                std::wstring wvname(vname.begin(), vname.end());
+                SendValueChange(woname, wvname,  monId, severity);
+                SendLog(L"Notification1 double", 0);
+            }
+            else if (UA_Variant_hasScalarType(&value->value, &UA_TYPES[UA_TYPES_LOCALIZEDTEXT]))
+            {
+                UA_LocalizedText* lt = (UA_LocalizedText*)value->value.data;
+                SendLog(L"Notification1 text", 0);
+            }
         }
-        else if (UA_Variant_hasScalarType(&value->value, &UA_TYPES[UA_TYPES_LOCALIZEDTEXT]))
-        {
-            UA_LocalizedText* lt = (UA_LocalizedText*)value->value.data;
-            SendLog(L"Notification1 text", 0);
-        }
+    }
+    else
+    {
+        std::wstringstream ss1;
+        ss1 << L"allRegisteredSubscription=" << monId << L" not found";
+        std::wstring str1 = ss1.str();
+        SendLog(str1, 0);
     }
 
 }
 #endif
 
-extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* object, char* varname, double interval)
-{
-    // The first publish request should return the initial value of the variable
-    //UA_Client_run_iterate(client, 1000);
-
-    SendLog(L"OPC_ClientSubscription", 0);
-
-    // Create a subscription
-    UA_CreateSubscriptionRequest request = UA_CreateSubscriptionRequest_default();
-    request.requestedPublishingInterval = interval;
-    UA_CreateSubscriptionResponse response = UA_Client_Subscriptions_create(client, request, NULL, NULL, NULL);
-
-    UA_UInt32 subId = response.subscriptionId;
-    if (response.responseHeader.serviceResult == UA_STATUSCODE_GOOD)
-    {
-        //printf("Create subscription succeeded, id %u\n", subId);
-        SendLog(L"Create subscription succeeded", 0);
-    }
-
-    UA_NodeId myDoubleNodeId;
-    std::string objectName(object);
-    std::string attributeName(varname);
-
-    //если это атрибут объекта
-    if (objectName != "")
-    {
-        myDoubleNodeId = ClientObjectNodes[objectName]->VariableNode_NameID[attributeName];
-    }
-    else
-    {
-        myDoubleNodeId = UA_NODEID_STRING(0, varname);
-    }
-
-    //UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(UA_NODEID_STRING(0, varname));
-    UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(myDoubleNodeId);
-
-    UA_MonitoredItemCreateResult monResponse = UA_Client_MonitoredItems_createDataChange(client, response.subscriptionId, UA_TIMESTAMPSTORETURN_BOTH,monRequest, NULL, handler_TheAnswerChanged, NULL);
-    
-    if (monResponse.statusCode == UA_STATUSCODE_GOOD)
-    {
-        SendLog(L"Monitoring .. ok", 0);
-        //printf("Monitoring 'the.answer', id %u\n", monResponse.monitoredItemId);
-    }
-    else
-    {
-        SendLog(L"Monitoring .. false", 0);
-    }
-
-    // The first publish request should return the initial value of the variable
-    UA_Client_run_iterate(client, 1000);
-
-    UA_UInt32 monId = monResponse.monitoredItemId;
-    return monId;
-
-    //UA_MonitoredItemCreateResult_clear(&result);
-    //UA_Client_Subscriptions_deleteSingle(client, response.subscriptionId);
-    //UA_Array_delete(filter.selectClauses, nSelectClauses, &UA_TYPES[UA_TYPES_SIMPLEATTRIBUTEOPERAND]);
-}
 
 
 
@@ -831,18 +805,27 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* objec
 
 
 
+extern "C" __declspec(dllexport) void OPC_ClientSubscriptionAddVariable(char* _objectname, char* _varname)
+{
+    std::string objectname(_objectname);
+    std::string varname(_varname);
 
+    SubscriptionElementClass *temp = new SubscriptionElementClass();
+    temp->objectname = objectname;
+    temp->variablename = varname;
+    
+    allClientSubscription.push_back(temp);
+    return;
+}
 
 
 
 /////////////
 
-extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription2(char* object, char* varname1, char* varname2, double interval)
+extern "C" __declspec(dllexport) int OPC_ClientSubscriptions(double interval)
 {
-    // The first publish request should return the initial value of the variable
-    //UA_Client_run_iterate(client, 1000);
-
-    SendLog(L"OPC_ClientSubscription2", 0);
+    SendLog(L"OPC_ClientSubscriptions", 0);
+    if (allClientSubscription.size() == 0) return 0;
 
     // Create a subscription
     UA_CreateSubscriptionRequest request = UA_CreateSubscriptionRequest_default();
@@ -856,56 +839,44 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription2(char* obje
         SendLog(L"Create subscription succeeded", 0);
     }
 
+    int count = allClientSubscription.size();
 
-    UA_MonitoredItemCreateRequest items[2];
-    UA_UInt32 newMonitoredItemIds[2];
-    UA_Client_DataChangeNotificationCallback callbacks[2];
-    UA_Client_DeleteMonitoredItemCallback deleteCallbacks[2];
-    void* contexts[2];
+    UA_MonitoredItemCreateRequest *items = new UA_MonitoredItemCreateRequest[count];
+    UA_UInt32 *newMonitoredItemIds = new UA_UInt32[count];
+    UA_Client_DataChangeNotificationCallback* callbacks = new UA_Client_DataChangeNotificationCallback[count];
+    UA_Client_DeleteMonitoredItemCallback* deleteCallbacks = new UA_Client_DeleteMonitoredItemCallback[count];
+    void** contexts = new void* [count];
 
-    UA_NodeId myDoubleNodeId1;
+    //UA_MonitoredItemCreateRequest items[2];
+    //UA_UInt32 newMonitoredItemIds[2];
+    //UA_Client_DataChangeNotificationCallback callbacks[2];
+    //UA_Client_DeleteMonitoredItemCallback deleteCallbacks[2];
+    //void* contexts[2];
+
+    for (int i = 0; i < count; i++)
     {
-        std::string objectName(object);
-        std::string attributeName(varname1);
+        UA_NodeId myDoubleNodeId1;
+        {
+            std::string objectName(allClientSubscription[i]->objectname);
+            std::string attributeName(allClientSubscription[i]->variablename);
 
-        //если это атрибут объекта
-        if (objectName != "")
-        {
-            myDoubleNodeId1 = ClientObjectNodes[objectName]->VariableNode_NameID[attributeName];
+            //если это атрибут объекта
+            if (objectName != "")
+            {
+                myDoubleNodeId1 = ClientObjectNodes[objectName]->VariableNode_NameID[attributeName];
+            }
+            else
+            {
+                myDoubleNodeId1 = UA_NODEID_STRING(0, (char*)allClientSubscription[i]->variablename.c_str());
+            }
         }
-        else
-        {
-            myDoubleNodeId1 = UA_NODEID_STRING(0, varname1);
-        }
+
+        //
+        items[i] = UA_MonitoredItemCreateRequest_default(myDoubleNodeId1);
+        callbacks[i] = handler_TheAnswerChanged;
+        contexts[i] = NULL;
+        deleteCallbacks[i] = NULL;
     }
-    UA_NodeId myDoubleNodeId2;
-    {
-        std::string objectName(object);
-        std::string attributeName(varname2);
-
-        //если это атрибут объекта
-        if (objectName != "")
-        {
-            myDoubleNodeId2 = ClientObjectNodes[objectName]->VariableNode_NameID[attributeName];
-        }
-        else
-        {
-            myDoubleNodeId2 = UA_NODEID_STRING(0, varname2);
-        }
-    }
-
-
-    //1
-    items[0] = UA_MonitoredItemCreateRequest_default(myDoubleNodeId1); 
-    callbacks[0] = handler_TheAnswerChanged;
-    contexts[0] = NULL;
-    deleteCallbacks[0] = NULL;
-
-    //2
-    items[1] = UA_MonitoredItemCreateRequest_default(myDoubleNodeId2);
-    callbacks[1] = handler_TheAnswerChanged;
-    contexts[1] = NULL;
-    deleteCallbacks[1] = NULL;
 
 
     UA_CreateMonitoredItemsRequest createRequest;
@@ -913,7 +884,7 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription2(char* obje
     createRequest.subscriptionId = subId;
     createRequest.timestampsToReturn = UA_TIMESTAMPSTORETURN_BOTH;
     createRequest.itemsToCreate = items;
-    createRequest.itemsToCreateSize = 2;
+    createRequest.itemsToCreateSize = count;
     UA_CreateMonitoredItemsResponse createResponse = UA_Client_MonitoredItems_createDataChanges(client, createRequest, contexts, callbacks, deleteCallbacks);
 
     if (createResponse.responseHeader.serviceResult == UA_STATUSCODE_GOOD)
@@ -924,35 +895,27 @@ extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription2(char* obje
     {
         SendLog(L"ok2", 0);
     }
-    if (createResponse.results[1].statusCode == UA_STATUSCODE_GOOD)
-    {
-        SendLog(L"ok3", 0);
-    }
+
    
     
     // The first publish request should return the initial value of the variable
     UA_Client_run_iterate(client, 1000);
 
-
-    newMonitoredItemIds[0] = createResponse.results[0].monitoredItemId;
-    newMonitoredItemIds[1] = createResponse.results[1].monitoredItemId;
-
-    std::wstringstream ss1;
-    ss1 << newMonitoredItemIds[0];
-    std::wstring str1 = ss1.str();
-
-    std::wstringstream ss2;
-    ss2 << newMonitoredItemIds[1];
-    std::wstring str2 = ss2.str();
-
-    SendLog(L"OPC_ClientSubscription2-1=" + str1, 0);
-    SendLog(L"OPC_ClientSubscription2-2=" + str2,  0);
+    for (int i = 0; i < count; i++)
+    {
+        newMonitoredItemIds[i] = createResponse.results[i].monitoredItemId;
+        std::wstringstream ss1;
+        ss1 << L"OPC_ClientSubscription->" << allClientSubscription[i]->objectname.c_str() << "*" << allClientSubscription[i]->variablename.c_str() << "=" << newMonitoredItemIds[i];
+        std::wstring str1 = ss1.str();
+        SendLog(str1, 0);
+        allRegisteredSubscription[newMonitoredItemIds[i]] = allClientSubscription[i];
+    }
+    
 
     UA_CreateMonitoredItemsResponse_deleteMembers(&createResponse);
 
+    //allClientSubscription.clear();
    
-
-
     return 0;
 }
 
@@ -1165,6 +1128,66 @@ extern "C" __declspec(dllexport)  int OPC_UA_Client_Service_browse()
 
 //--------------OLD and TEST------------------------------------------------------------
 
+/*
+extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* object, char* varname, double interval)
+{
+    // The first publish request should return the initial value of the variable
+    //UA_Client_run_iterate(client, 1000);
+
+    SendLog(L"OPC_ClientSubscription", 0);
+
+    // Create a subscription
+    UA_CreateSubscriptionRequest request = UA_CreateSubscriptionRequest_default();
+    request.requestedPublishingInterval = interval;
+    UA_CreateSubscriptionResponse response = UA_Client_Subscriptions_create(client, request, NULL, NULL, NULL);
+
+    UA_UInt32 subId = response.subscriptionId;
+    if (response.responseHeader.serviceResult == UA_STATUSCODE_GOOD)
+    {
+        //printf("Create subscription succeeded, id %u\n", subId);
+        SendLog(L"Create subscription succeeded", 0);
+    }
+
+    UA_NodeId myDoubleNodeId;
+    std::string objectName(object);
+    std::string attributeName(varname);
+
+    //если это атрибут объекта
+    if (objectName != "")
+    {
+        myDoubleNodeId = ClientObjectNodes[objectName]->VariableNode_NameID[attributeName];
+    }
+    else
+    {
+        myDoubleNodeId = UA_NODEID_STRING(0, varname);
+    }
+
+    //UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(UA_NODEID_STRING(0, varname));
+    UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(myDoubleNodeId);
+
+    UA_MonitoredItemCreateResult monResponse = UA_Client_MonitoredItems_createDataChange(client, response.subscriptionId, UA_TIMESTAMPSTORETURN_BOTH,monRequest, NULL, handler_TheAnswerChanged, NULL);
+    
+    if (monResponse.statusCode == UA_STATUSCODE_GOOD)
+    {
+        SendLog(L"Monitoring .. ok", 0);
+        //printf("Monitoring 'the.answer', id %u\n", monResponse.monitoredItemId);
+    }
+    else
+    {
+        SendLog(L"Monitoring .. false", 0);
+    }
+
+    // The first publish request should return the initial value of the variable
+    UA_Client_run_iterate(client, 1000);
+
+    UA_UInt32 monId = monResponse.monitoredItemId;
+    return monId;
+
+    //UA_MonitoredItemCreateResult_clear(&result);
+    //UA_Client_Subscriptions_deleteSingle(client, response.subscriptionId);
+    //UA_Array_delete(filter.selectClauses, nSelectClauses, &UA_TYPES[UA_TYPES_SIMPLEATTRIBUTEOPERAND]);
+}
+*/
 
  /*
  //tutorial_server_object.c
