@@ -80,6 +80,9 @@ std::map< unsigned int, SubscriptionElementClass*> allServerRegisteredSubscripti
 //функции общие
 // RegisterDebugCallback - регистрация callback'ов
 //1. SendLog - дебаг-вывод в unity
+//2. SendMethodCall - вызывается при сработке метода
+//3. SendValueChange - сработка подписки на изменение (для клиента)
+//4. ServerSendValueChange - - сработка подписки на изменение (для сервера)
 
 //функции сервера:
 //1. int OPC_ServerCreate () - создание сервера OPC
@@ -530,6 +533,109 @@ extern "C" __declspec(dllexport) int OPC_ServerShutdown()
     //nl.deleteMembers(&nl);
 }
 
+//-----------------------------------Регистрация метода из сервера и обработчик вызова метода--------------------------------
+//tutorial_server_method.c
+static UA_StatusCode helloWorldMethodCallback(UA_Server* server,
+    const UA_NodeId* sessionId, void* sessionHandle,
+    const UA_NodeId* methodId, void* methodContext,
+    const UA_NodeId* objectId, void* objectContext,
+    size_t inputSize, const UA_Variant* input,
+    size_t outputSize, UA_Variant* output)
+{
+    UA_String* inputStr = (UA_String*)input->data;
+    UA_String tmp = UA_STRING_ALLOC("Hello ");
+    if (inputStr->length > 0) {
+        tmp.data = (UA_Byte*)UA_realloc(tmp.data, tmp.length + inputStr->length);
+        memcpy(&tmp.data[tmp.length], inputStr->data, inputStr->length);
+        tmp.length += inputStr->length;
+    }
+    UA_Variant_setScalarCopy(output, &tmp, &UA_TYPES[UA_TYPES_STRING]);
+    UA_String_clear(&tmp);
+    //UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Hello World was called");
+    SendLog(L"debug DLL:Hello World was called", 0);
+
+
+    char* convert = (char*)UA_malloc(sizeof(char) * inputStr->length + 1);
+    memcpy(convert, inputStr->data, inputStr->length);
+    convert[inputStr->length] = '\0';
+
+    std::wstringstream cls;
+    cls << convert;
+    std::wstring name = cls.str();
+
+    SendMethodCall(name, methodId->identifier.numeric);
+
+
+    return UA_STATUSCODE_GOOD;
+}
+
+static void addHelloWorldMethod(UA_Server* server, unsigned int nodeID, char* name, char* displayName, char* description)
+{
+    UA_Argument inputArgument;
+    UA_Argument_init(&inputArgument);
+    inputArgument.description = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"A String");
+    inputArgument.name = UA_STRING((char*)"MyInput");
+    inputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+    inputArgument.valueRank = UA_VALUERANK_SCALAR;
+
+    UA_Argument outputArgument;
+    UA_Argument_init(&outputArgument);
+    outputArgument.description = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"A String");
+    outputArgument.name = UA_STRING((char*)"MyOutput");
+    outputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+    outputArgument.valueRank = UA_VALUERANK_SCALAR;
+
+    UA_MethodAttributes helloAttr = UA_MethodAttributes_default;
+    helloAttr.description = UA_LOCALIZEDTEXT((char*)"en-US", description);  //4 (char*)"Say `Hello World`"
+    helloAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", displayName);  //3 (char*)"Hello World"
+    helloAttr.executable = true;
+    helloAttr.userExecutable = true;
+    UA_Server_addMethodNode(server, UA_NODEID_NUMERIC(0, nodeID),           //1 unsigned int //62541
+        UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+        UA_QUALIFIEDNAME(1, name),                      //2      (char*)"hello world"
+        helloAttr, &helloWorldMethodCallback,
+        1, &inputArgument, 1, &outputArgument, NULL, NULL);
+}
+
+//9. int OPC_ServerCreateMethod (nodeID, name, displayName, description) - создание метода (УНИКАЛЬЫНЙ НОМЕР, ИМЯ МЕТОДА, НАЗВАНИЕ МЕТОДА, ОПИСАНИЕ)
+extern "C" __declspec(dllexport) int OPC_ServerCreateMethod(unsigned int nodeID, char* name, char* displayName, char* description)
+{
+    addHelloWorldMethod(server, nodeID, name, displayName, description);
+    return 0;
+}
+//-----------------------------------Регистрация метода и обработчик вызова метода--------------------------------
+
+
+//-----------------------------------Вызов метода  из сервера-----------------------------------------------------
+//10. int OPC_ServerCallMethod - вызов метода из сервера (nodeID, value) - (УНИКАЛЬЫНЙ НОМЕР, ЗНАЧЕНИЕ)
+extern "C" __declspec(dllexport) int OPC_ServerCallMethod(unsigned int NodeId, char* value)
+{
+
+    UA_Argument inputArgument;
+    UA_Argument_init(&inputArgument);
+    inputArgument.description = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"A String");
+    inputArgument.name = UA_STRING((char*)"MyInput");
+    inputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+    inputArgument.valueRank = UA_VALUERANK_SCALAR;
+
+
+    UA_Variant* inputArguments = (UA_Variant*)UA_calloc(1, (sizeof(UA_Variant)));
+    UA_String _value = UA_STRING(value);
+    UA_Variant_setScalar(&inputArguments[0], &_value, &UA_TYPES[UA_TYPES_STRING]);
+
+    UA_CallMethodRequest callMethodRequest;
+    UA_CallMethodRequest_init(&callMethodRequest);
+    callMethodRequest.inputArgumentsSize = 1;
+    callMethodRequest.inputArguments = inputArguments;
+    callMethodRequest.objectId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
+    callMethodRequest.methodId = UA_NODEID_NUMERIC(0, NodeId);
+    UA_CallMethodResult response = UA_Server_call(server, &callMethodRequest);
+
+    UA_CallMethodResult_clear(&response);
+    return 0;
+}
+//-----------------------------------Вызов метода  из сервера-----------------------------------------------------
 
 //Обработчик изменения переменной для сервера
 static void serverDataChangeNotificationCallback(UA_Server* server, UA_UInt32 monitoredItemId, void* monitoredItemContext, const UA_NodeId* nodeId, void* nodeContext, UA_UInt32 attributeId, const UA_DataValue* value)
@@ -602,6 +708,11 @@ extern "C" __declspec(dllexport) int OPC_ServerSubscription(char* objectString, 
 
     return 0;
 }
+
+
+
+
+
 
 
 
@@ -716,115 +827,6 @@ extern "C" __declspec(dllexport) int OPC_ClientDelete()
     return 0;
 }
 
-
-
-
-
-//-----------------------------------Регистрация метода из сервера и обработчик вызова метода--------------------------------
-//tutorial_server_method.c
-static UA_StatusCode helloWorldMethodCallback(UA_Server* server,
-    const UA_NodeId* sessionId, void* sessionHandle,
-    const UA_NodeId* methodId, void* methodContext,
-    const UA_NodeId* objectId, void* objectContext,
-    size_t inputSize, const UA_Variant* input,
-    size_t outputSize, UA_Variant* output)
-{
-    UA_String* inputStr = (UA_String*)input->data;
-    UA_String tmp = UA_STRING_ALLOC("Hello ");
-    if (inputStr->length > 0) {
-        tmp.data = (UA_Byte*)UA_realloc(tmp.data, tmp.length + inputStr->length);
-        memcpy(&tmp.data[tmp.length], inputStr->data, inputStr->length);
-        tmp.length += inputStr->length;
-    }
-    UA_Variant_setScalarCopy(output, &tmp, &UA_TYPES[UA_TYPES_STRING]);
-    UA_String_clear(&tmp);
-    //UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Hello World was called");
-    SendLog(L"debug DLL:Hello World was called", 0);
-
-
-    char* convert = (char*)UA_malloc(sizeof(char) * inputStr->length + 1);
-    memcpy(convert, inputStr->data, inputStr->length);
-    convert[inputStr->length] = '\0';
-
-    std::wstringstream cls;
-    cls << convert;
-    std::wstring name = cls.str();
-
-    SendMethodCall(name, methodId->identifier.numeric);
-
-
-    return UA_STATUSCODE_GOOD;
-}
-
-static void addHelloWorldMethod(UA_Server* server, unsigned int nodeID, char* name, char* displayName, char* description)
-{
-    UA_Argument inputArgument;
-    UA_Argument_init(&inputArgument);
-    inputArgument.description = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"A String");
-    inputArgument.name = UA_STRING((char*)"MyInput");
-    inputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-    inputArgument.valueRank = UA_VALUERANK_SCALAR;
-
-    UA_Argument outputArgument;
-    UA_Argument_init(&outputArgument);
-    outputArgument.description = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"A String");
-    outputArgument.name = UA_STRING((char*)"MyOutput");
-    outputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-    outputArgument.valueRank = UA_VALUERANK_SCALAR;
-
-    UA_MethodAttributes helloAttr = UA_MethodAttributes_default;
-    helloAttr.description = UA_LOCALIZEDTEXT((char*)"en-US", description);  //4 (char*)"Say `Hello World`"
-    helloAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", displayName);  //3 (char*)"Hello World"
-    helloAttr.executable = true;
-    helloAttr.userExecutable = true;
-    UA_Server_addMethodNode(server, UA_NODEID_NUMERIC(0, nodeID),           //1 unsigned int //62541
-        UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, name),                      //2      (char*)"hello world"
-        helloAttr, &helloWorldMethodCallback,
-        1, &inputArgument, 1, &outputArgument, NULL, NULL);
-}
-
-//9. int OPC_ServerCreateMethod (nodeID, name, displayName, description) - создание метода (УНИКАЛЬЫНЙ НОМЕР, ИМЯ МЕТОДА, НАЗВАНИЕ МЕТОДА, ОПИСАНИЕ)
-extern "C" __declspec(dllexport) int OPC_ServerCreateMethod(unsigned int nodeID, char* name, char* displayName, char* description)
-{
-    addHelloWorldMethod(server, nodeID, name, displayName, description);
-    return 0;
-}
-//-----------------------------------Регистрация метода и обработчик вызова метода--------------------------------
-
-
-//-----------------------------------Вызов метода  из сервера-----------------------------------------------------
-//10. int OPC_ServerCallMethod - вызов метода из сервера (nodeID, value) - (УНИКАЛЬЫНЙ НОМЕР, ЗНАЧЕНИЕ)
-extern "C" __declspec(dllexport) int OPC_ServerCallMethod(unsigned int NodeId, char* value)
-{
-    
-    UA_Argument inputArgument;
-    UA_Argument_init(&inputArgument);
-    inputArgument.description = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"A String");
-    inputArgument.name = UA_STRING((char*)"MyInput");
-    inputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-    inputArgument.valueRank = UA_VALUERANK_SCALAR;
-
-
-    UA_Variant* inputArguments = (UA_Variant*)UA_calloc(1, (sizeof(UA_Variant)));
-    UA_String _value = UA_STRING(value);
-    UA_Variant_setScalar(&inputArguments[0], &_value, &UA_TYPES[UA_TYPES_STRING]);
-
-    UA_CallMethodRequest callMethodRequest;
-    UA_CallMethodRequest_init(&callMethodRequest);
-    callMethodRequest.inputArgumentsSize = 1;
-    callMethodRequest.inputArguments = inputArguments;
-    callMethodRequest.objectId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
-    callMethodRequest.methodId = UA_NODEID_NUMERIC(0, NodeId);
-    UA_CallMethodResult response = UA_Server_call(server, &callMethodRequest);
-       
-    UA_CallMethodResult_clear(&response);
-    return 0;
-}
-//-----------------------------------Вызов метода  из сервера-----------------------------------------------------
-
-//-----------------------------------Вызов метода  из клиента-----------------------------------------------------
 //6. int OPC_ClientCallMethod(NodeID, value) - вызов метода по никальному ID (нгапример, NodeID=62541) и строковым параметров
 extern "C" __declspec(dllexport) int OPC_ClientCallMethod(unsigned int NodeId, char* value)
 {
@@ -855,9 +857,179 @@ extern "C" __declspec(dllexport) int OPC_ClientCallMethod(unsigned int NodeId, c
 #endif
     return 0;
 }
-//-----------------------------------Вызов метода  из клиента-----------------------------------------------------
 
 
+
+
+
+
+
+
+
+
+//--------------------------------------------Чтение структуры------------------------------------------------------------------
+void Client_Service_browse_recursive(UA_NodeId browse_node, std::string ParentName)
+{
+    UA_BrowseRequest bReq;
+    UA_BrowseRequest_init(&bReq);
+    bReq.requestedMaxReferencesPerNode = 0;
+    bReq.nodesToBrowse = UA_BrowseDescription_new();
+    bReq.nodesToBrowseSize = 1;
+    bReq.nodesToBrowse[0].nodeId = browse_node; // UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER); // browse objects folder
+    bReq.nodesToBrowse[0].resultMask = UA_BROWSERESULTMASK_ALL; // return everything
+    //bReq.nodesToBrowse[0].includeSubtypes = UA_TRUE;
+    //bReq.nodesToBrowse[0].referenceTypeId = UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT); //ТОЛЬКО МЕТОДЫ
+    //bReq.nodesToBrowse[0].referenceTypeId = UA_NODEID_NUMERIC(0, ); //ТОЛЬКО каталоги ..UA_NS0ID_ORGANIZES UA_NS0ID_FOLDERTYPE UA_NS0ID_HASCHILD UA_NS0ID_OBJECTNODE UA_NS0ID_HIERARCHICALREFERENCES
+    UA_BrowseResponse bResp = UA_Client_Service_browse(client, bReq);
+    //printf("%-9s %-16s %-16s %-16s\n", "NAMESPACE", "NODEID", "BROWSE NAME", "DISPLAY NAME");
+    SendLog(L"NAMESPACE, NODEID, BROWSE NAME, DISPLAY NAME", 0);
+    for (size_t i = 0; i < bResp.resultsSize; ++i)
+    {
+        for (size_t j = 0; j < bResp.results[i].referencesSize; ++j)
+        {
+            UA_ReferenceDescription* ref = &(bResp.results[i].references[j]);
+
+            //тип
+            if (ref->nodeClass == UA_NODECLASS_OBJECT)
+            {
+                SendLog(L"Group!!!!", 0);
+            }
+            if (ref->nodeClass == UA_NODECLASS_METHOD)
+            {
+                SendLog(L"Method!!!!", 0);
+            }
+
+            //тут за идентификатор, т.е. чем определяется переменная - именем или строкой, может быть и так и так
+            if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_NUMERIC)
+            {
+                //printf("%-9u %-16u %-16.*s %-16.*s\n", ref->nodeId.nodeId.namespaceIndex,
+                //    ref->nodeId.nodeId.identifier.numeric, (int)ref->browseName.name.length,
+                //    ref->browseName.name.data, (int)ref->displayName.text.length,
+                //    ref->displayName.text.data);
+                UA_UInt16 a = ref->nodeId.nodeId.namespaceIndex;
+                UA_UInt32 b = ref->nodeId.nodeId.identifier.numeric;
+                int c = (int)ref->browseName.name.length;
+                UA_Byte* d = ref->browseName.name.data;
+                int e = (int)ref->displayName.text.length;
+                UA_Byte* f = ref->displayName.text.data;
+
+                {
+                    UA_UInt32 numeric_id = ref->nodeId.nodeId.identifier.numeric;
+
+                    char* convert = (char*)UA_malloc(sizeof(char) * ref->displayName.text.length + 1);
+                    memcpy(convert, ref->displayName.text.data, ref->displayName.text.length);
+                    convert[ref->displayName.text.length] = '\0';
+
+                    std::wstring sub = L"";
+                    if (ParentName != "") sub = L"---->";
+
+                    std::wstringstream cls;
+                    cls << sub << convert << "=" << numeric_id;
+                    std::wstring displayName = cls.str();
+
+                    //ИСКЛЮЧИТЬ! BaseObjectType=58
+                    std::stringstream cls2;
+                    cls2 << convert;
+                    std::string flushName = cls2.str();
+
+                    if ((flushName == "BaseObjectType") || (numeric_id == 58) || (flushName == "Server")) continue;
+
+                    SendLog(displayName, 0);
+                    if (ParentName != "")
+                    {
+                        //если этого объекта еще нет - создаем и запоминаем
+                        if (ClientObjectNodes.count(ParentName) == 0)
+                        {
+                            ObjectNodeVariables* newObjectNode = new ObjectNodeVariables;
+                            newObjectNode->nodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
+                            ClientObjectNodes[ParentName] = newObjectNode;
+                        }
+                        //теперь создаем атрибут в объекте
+                        ClientObjectNodes[ParentName]->VariableNode_NameID[flushName] = UA_NODEID_NUMERIC(0, numeric_id);
+                    }
+
+
+                    if (ref->nodeClass == UA_NODECLASS_OBJECT)
+                    {
+                        std::string parentname(convert);
+                        Client_Service_browse_recursive(ref->nodeId.nodeId, parentname);
+                    }
+                }
+            }
+            else if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_STRING)
+            {
+                //printf("%-9u %-16.*s %-16.*s %-16.*s\n", ref->nodeId.nodeId.namespaceIndex,
+                //    (int)ref->nodeId.nodeId.identifier.string.length,
+                //    ref->nodeId.nodeId.identifier.string.data,
+                //    (int)ref->browseName.name.length, ref->browseName.name.data,
+                //    (int)ref->displayName.text.length, ref->displayName.text.data);
+
+                char* convert = (char*)UA_malloc(sizeof(char) * ref->displayName.text.length + 1);
+                memcpy(convert, ref->displayName.text.data, ref->displayName.text.length);
+                convert[ref->displayName.text.length] = '\0';
+
+                char* convert1 = (char*)UA_malloc(sizeof(char) * (int)ref->nodeId.nodeId.identifier.string.length + 1);
+                memcpy(convert1, ref->nodeId.nodeId.identifier.string.data, (int)ref->nodeId.nodeId.identifier.string.length);
+                convert1[(int)ref->nodeId.nodeId.identifier.string.length] = '\0';
+
+                std::wstring sub = L"";
+                if (ParentName != "") sub = L"---->";
+
+                std::wstringstream cls;
+                cls << sub << convert << "=" << convert1;
+                std::wstring displayName = cls.str();
+
+                std::stringstream cls2;
+                cls2 << convert;
+                std::string flushName = cls2.str();
+
+                std::stringstream cls3;
+                cls3 << convert1;
+                std::string flushName2 = cls3.str();
+
+                //ИСКЛЮЧИТЬ! BaseObjectType=58
+                if ((flushName == "BaseObjectType") || (flushName2 == "58") || (flushName == "Server")) continue;
+                SendLog(displayName, 0);
+
+                if (ParentName != "")
+                {
+                    //если этого объекта еще нет - создаем и запоминаем
+                    if (ClientObjectNodes.count(ParentName) == 0)
+                    {
+                        ObjectNodeVariables* newObjectNode = new ObjectNodeVariables;
+                        newObjectNode->nodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
+                        ClientObjectNodes[ParentName] = newObjectNode;
+                    }
+                    //теперь создаем атрибут в объекте
+                    ClientObjectNodes[ParentName]->VariableNode_NameID[flushName] = UA_NODEID_STRING(0, (char*)flushName.c_str());
+                }
+
+                if (ref->nodeClass == UA_NODECLASS_OBJECT)
+                {
+                    std::string parentname(convert);
+                    Client_Service_browse_recursive(ref->nodeId.nodeId, parentname);
+                }
+            }
+        }
+    }
+    UA_BrowseRequest_clear(&bReq);
+    UA_BrowseResponse_clear(&bResp);
+}
+
+//7. int OPC_UA_Client_Service_browse() - читает всю структуру иерархии дерева с сервера для возможности писать не только в корневые объекты, возвращает число прочитанных узлов
+extern "C" __declspec(dllexport)  int OPC_UA_Client_Service_browse()
+{
+    //чистим дерево связей
+    ClientObjectNodes.clear();
+    SendLog(L"Browsing nodes in objects folder", 0);
+
+    Client_Service_browse_recursive(UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), ""); // browse objects folder);
+
+    //(L"ClientObjectNodes.count = " + std::wstring(ClientObjectNodes.size()), 0);
+
+
+    return 0;
+}
 
 //----------------------------------------подписка на мониторинг переменной и события для клиента------------------------------------------------
 //Обработчик см. tutorial_client_events
@@ -899,20 +1071,7 @@ static void handler_TheAnswerChanged(UA_Client* client, UA_UInt32 subId, void* s
 }
 #endif
 
-//9. OPC_ClientSubscriptionAddVariable - добавляет в подписку (выполнять до OPC_ClientSubscriptions) одну переменную (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ)
-extern "C" __declspec(dllexport) void OPC_ClientSubscriptionAddVariable(char* _objectname, char* _varname)
-{
-    std::string objectname(_objectname);
-    std::string varname(_varname);
 
-    SubscriptionElementClass *temp = new SubscriptionElementClass();
-    temp->objectname = objectname;
-    temp->variablename = varname;
-    
-    allClientSubscription.push_back(temp);
-    return;
-}
-/////////////
 //8. int OPC_ClientSubscriptions - выполняет подписку на все перменные, ранее переданные через OPC_ClientSubscriptionAddVariable. Параметр - частота опроса, мсек, т.е. 1000=1с
 extern "C" __declspec(dllexport) int OPC_ClientSubscriptions(double interval)
 {
@@ -1013,172 +1172,21 @@ extern "C" __declspec(dllexport) int OPC_ClientSubscriptions(double interval)
    
     return 0;
 }
-//////////////////
 
-//--------------------------------------------Чтение структуры------------------------------------------------------------------
-void Client_Service_browse_recursive(UA_NodeId browse_node, std::string ParentName)
+
+//9. OPC_ClientSubscriptionAddVariable - добавляет в подписку (выполнять до OPC_ClientSubscriptions) одну переменную (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ)
+extern "C" __declspec(dllexport) void OPC_ClientSubscriptionAddVariable(char* _objectname, char* _varname)
 {
-    UA_BrowseRequest bReq;
-    UA_BrowseRequest_init(&bReq);
-    bReq.requestedMaxReferencesPerNode = 0;
-    bReq.nodesToBrowse = UA_BrowseDescription_new();
-    bReq.nodesToBrowseSize = 1;
-    bReq.nodesToBrowse[0].nodeId = browse_node; // UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER); // browse objects folder
-    bReq.nodesToBrowse[0].resultMask = UA_BROWSERESULTMASK_ALL; // return everything
-    //bReq.nodesToBrowse[0].includeSubtypes = UA_TRUE;
-    //bReq.nodesToBrowse[0].referenceTypeId = UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT); //ТОЛЬКО МЕТОДЫ
-    //bReq.nodesToBrowse[0].referenceTypeId = UA_NODEID_NUMERIC(0, ); //ТОЛЬКО каталоги ..UA_NS0ID_ORGANIZES UA_NS0ID_FOLDERTYPE UA_NS0ID_HASCHILD UA_NS0ID_OBJECTNODE UA_NS0ID_HIERARCHICALREFERENCES
-    UA_BrowseResponse bResp = UA_Client_Service_browse(client, bReq);
-    //printf("%-9s %-16s %-16s %-16s\n", "NAMESPACE", "NODEID", "BROWSE NAME", "DISPLAY NAME");
-    SendLog(L"NAMESPACE, NODEID, BROWSE NAME, DISPLAY NAME", 0);
-    for (size_t i = 0; i < bResp.resultsSize; ++i)
-    {
-        for (size_t j = 0; j < bResp.results[i].referencesSize; ++j)
-        {
-            UA_ReferenceDescription* ref = &(bResp.results[i].references[j]);
+    std::string objectname(_objectname);
+    std::string varname(_varname);
 
-            //тип
-            if (ref->nodeClass == UA_NODECLASS_OBJECT)
-            {
-                SendLog(L"Group!!!!", 0);
-            }
-            if (ref->nodeClass == UA_NODECLASS_METHOD)
-            {
-                SendLog(L"Method!!!!", 0);
-            }
-                
-            //тут за идентификатор, т.е. чем определяется переменная - именем или строкой, может быть и так и так
-            if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_NUMERIC)
-            {
-                //printf("%-9u %-16u %-16.*s %-16.*s\n", ref->nodeId.nodeId.namespaceIndex,
-                //    ref->nodeId.nodeId.identifier.numeric, (int)ref->browseName.name.length,
-                //    ref->browseName.name.data, (int)ref->displayName.text.length,
-                //    ref->displayName.text.data);
-                UA_UInt16 a = ref->nodeId.nodeId.namespaceIndex;
-                UA_UInt32 b = ref->nodeId.nodeId.identifier.numeric;
-                int c = (int)ref->browseName.name.length;
-                UA_Byte* d = ref->browseName.name.data;
-                int e = (int)ref->displayName.text.length;
-                UA_Byte* f = ref->displayName.text.data;
+    SubscriptionElementClass* temp = new SubscriptionElementClass();
+    temp->objectname = objectname;
+    temp->variablename = varname;
 
-                {
-                    UA_UInt32 numeric_id = ref->nodeId.nodeId.identifier.numeric;
-
-                    char* convert = (char*)UA_malloc(sizeof(char) * ref->displayName.text.length + 1);
-                    memcpy(convert, ref->displayName.text.data, ref->displayName.text.length);
-                    convert[ref->displayName.text.length] = '\0';
-
-                    std::wstring sub = L"";
-                    if (ParentName != "") sub = L"---->";
-
-                    std::wstringstream cls;
-                    cls << sub << convert << "=" << numeric_id;
-                    std::wstring displayName = cls.str();
-
-                    //ИСКЛЮЧИТЬ! BaseObjectType=58
-                    std::stringstream cls2;
-                    cls2 << convert;
-                    std::string flushName = cls2.str();
-
-                    if ((flushName == "BaseObjectType") || (numeric_id == 58) || (flushName == "Server")) continue;
-
-                    SendLog(displayName, 0);
-                    if (ParentName != "")
-                    {
-                        //если этого объекта еще нет - создаем и запоминаем
-                        if (ClientObjectNodes.count(ParentName) == 0)
-                        {
-                            ObjectNodeVariables* newObjectNode = new ObjectNodeVariables;
-                            newObjectNode->nodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
-                            ClientObjectNodes[ParentName] = newObjectNode;
-                        }
-                        //теперь создаем атрибут в объекте
-                        ClientObjectNodes[ParentName]->VariableNode_NameID[flushName] = UA_NODEID_NUMERIC(0,numeric_id);
-                    }
-
-
-                    if (ref->nodeClass == UA_NODECLASS_OBJECT)
-                    {
-                        std::string parentname(convert);
-                        Client_Service_browse_recursive(ref->nodeId.nodeId, parentname);
-                    }
-                }
-            }
-            else if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_STRING)
-            {
-                //printf("%-9u %-16.*s %-16.*s %-16.*s\n", ref->nodeId.nodeId.namespaceIndex,
-                //    (int)ref->nodeId.nodeId.identifier.string.length,
-                //    ref->nodeId.nodeId.identifier.string.data,
-                //    (int)ref->browseName.name.length, ref->browseName.name.data,
-                //    (int)ref->displayName.text.length, ref->displayName.text.data);
-
-                char* convert = (char*)UA_malloc(sizeof(char) * ref->displayName.text.length + 1);
-                memcpy(convert, ref->displayName.text.data, ref->displayName.text.length);
-                convert[ref->displayName.text.length] = '\0';
-
-                char* convert1 = (char*)UA_malloc(sizeof(char) * (int)ref->nodeId.nodeId.identifier.string.length + 1);
-                memcpy(convert1, ref->nodeId.nodeId.identifier.string.data, (int)ref->nodeId.nodeId.identifier.string.length);
-                convert1[(int)ref->nodeId.nodeId.identifier.string.length] = '\0';
-
-                std::wstring sub = L"";
-                if (ParentName != "") sub = L"---->";
-
-                std::wstringstream cls;
-                cls << sub  << convert << "=" << convert1;
-                std::wstring displayName = cls.str();
-
-                std::stringstream cls2;
-                cls2 << convert;
-                std::string flushName = cls2.str();
-
-                std::stringstream cls3;
-                cls3 << convert1;
-                std::string flushName2 = cls3.str();
-
-                //ИСКЛЮЧИТЬ! BaseObjectType=58
-                if ((flushName == "BaseObjectType")|| (flushName2 == "58") || (flushName == "Server")) continue;
-                SendLog(displayName, 0);
-
-                if (ParentName != "")
-                {
-                    //если этого объекта еще нет - создаем и запоминаем
-                    if (ClientObjectNodes.count(ParentName) == 0)
-                    {
-                        ObjectNodeVariables* newObjectNode = new ObjectNodeVariables;
-                        newObjectNode->nodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
-                        ClientObjectNodes[ParentName] = newObjectNode;
-                    }
-                    //теперь создаем атрибут в объекте
-                    ClientObjectNodes[ParentName]->VariableNode_NameID[flushName] = UA_NODEID_STRING(0, (char*)flushName.c_str());
-                }
-
-                if (ref->nodeClass == UA_NODECLASS_OBJECT)
-                {
-                    std::string parentname(convert);
-                    Client_Service_browse_recursive(ref->nodeId.nodeId, parentname);
-                }
-            }
-        }
-    }
-    UA_BrowseRequest_clear(&bReq);
-    UA_BrowseResponse_clear(&bResp);
+    allClientSubscription.push_back(temp);
+    return;
 }
-
-//7. int OPC_UA_Client_Service_browse() - читает всю структуру иерархии дерева с сервера для возможности писать не только в корневые объекты, возвращает число прочитанных узлов
-extern "C" __declspec(dllexport)  int OPC_UA_Client_Service_browse()
-{
-    //чистим дерево связей
-    ClientObjectNodes.clear();
-    SendLog(L"Browsing nodes in objects folder", 0);
-
-    Client_Service_browse_recursive(UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), ""); // browse objects folder);
-
-    //(L"ClientObjectNodes.count = " + std::wstring(ClientObjectNodes.size()), 0);
-    
-
-    return 0;
-}
-//---------------------------------------------------------------------------------------------------------------------------------------
 
 /*
 
