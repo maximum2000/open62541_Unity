@@ -64,64 +64,53 @@ class SubscriptionElementClass
 public:
     std::string objectname = "";
     std::string variablename = "";
-    double interval = 1000;
+    //double interval = 1000;
 };
+
+//подписка для клиента
 std::vector <SubscriptionElementClass*> allClientSubscription;
 //unsigned int monID, 
 std::map< unsigned int, SubscriptionElementClass*> allRegisteredSubscription;
+
+//подписка для клиента
+//NodeID, ....
+std::map< unsigned int, SubscriptionElementClass*> allServerRegisteredSubscription;
+
 
 //функции общие
 // RegisterDebugCallback - регистрация callback'ов
 //1. SendLog - дебаг-вывод в unity
 
 //функции сервера:
-//1. int OPC_ServerCreate () - создание сервера
+//1. int OPC_ServerCreate () - создание сервера OPC
 //2. int OPC_ServerUpdate () - обновление сервера
-//3. int OPC_ServerAddVariableDouble ( objectname, description, displayName) // (char*)"the.answer", (char*)"the answer" - добавление переменной
-//4. int OPC_ServerWriteValueDouble (objectname, description, value) //(char*)"the.answer", double - запись значения переменной
-//5. double OPC_ServerReadValueDouble (objectname, description) //(char*)"the.answer" - чтение переменной
-//6. int OPC_ServerWriteValueString (objectname, description, value) 
-//7. double OPC_ServerReadValueString (objectname, description) 
-//8. int OPC_ServerShutdown - выключение сервера 
-//9. int OPC_ServerCreateMethod(unsigned int nodeID, char* name, char* displayName, char* description) - создание метода и обработчик метода
-//10. int OPC_ServerCallMethod(unsigned int NodeId, char* value)  - Вызов метода  из сервера 
-
-
-//Про методы: например можно сделать метод - создать игрока передать туда имя и тип и в ответ получить ок или не ок, можно и в ответ имя получить
-// UA_NODEID_NUMERIC / UA_NODEID_STRING 0 - NAMESPACE NS0
-
-
+//3. int OPC_ServerAddVariable (objectname, varname, type)  - добавить переменную (ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ТИП (0-double/1-int)
+//4. int OPC_ServerWriteValueDouble (objectname, varname, value)  - изменить переменную типа DOUBLE (ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ЗНАЧЕНИЕ)
+//5. double OPC_ServerReadValueDouble (objectname, varname) - прочитать напрямую переменную типа DOUBLE (ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ)
+//6. int OPC_ServerWriteValueString - изменить переменную типа STRING (ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ЗНАЧЕНИЕ)
+//7. int OPC_ServerReadValueString - прочитать напрямую переменную типа STRING (ВОЗРАЩАЕМОЕ ЗНАЧЕНИЕ, ВОЗВРАЩАЕМАЯ ДЛИННА,  ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ)
+//8. int OPC_ServerShutdown - выключение сервера
+//9. int OPC_ServerCreateMethod (nodeID, name, displayName, description) - создание метода (УНИКАЛЬЫНЙ НОМЕР, ИМЯ МЕТОДА, НАЗВАНИЕ МЕТОДА, ОПИСАНИЕ)
+//10. int OPC_ServerCallMethod - вызов метода из сервера (nodeID, value) - (УНИКАЛЬЫНЙ НОМЕР, ЗНАЧЕНИЕ)
+//11. int OPC_ServerSubscription - Добавить подписку на изменение переменной для сервера(objectString, varNameString, interval) - (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ИНТЕРВАЛ 1000=1с)
 
 //функции клиента:
-//1. int OPC_ClientConnect (url) // "opc.tcp://localhost:4840" - подключение к серверу
-//2. int OPC_ClientWriteValueDouble (description, value) //(char*)"the.answer", double - запись значения переменной
-//3. double OPC_ClientReadValueDouble (description) //(char*)"the.answer" - чтение значения переменной
+//1. int OPC_ClientConnect (url) - ПОДКЛЮЧЕНИЕ К СЕРВЕРУ "opc.tcp://localhost:4840"
+//2. int OPC_ClientWriteValueDouble (objectname, varname, value) - записать переменную типа DOUBLE (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ЗНАЧЕНИЕ)
+//3. double OPC_ClientReadValueDouble (objectname, varname) - ПРЯМОЕ чтение переменной типа DOUBLE (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ)
 //4. int OPC_ClientUpdate () - обновление клиента
 //5. int OPC_ClientDelete() - выключение клиента
-//6. int OPC_ClientCallMethod (unsigned int NodeId, char* value) - вызов метода
-//7. int OPC_ClientSubscription(char* varname, double interval) - подписка на изменение значения переменной
-//8. int OPC_UA_Client_Service_browse() - читает всю структуру иерархии дерева с сервера для возможности писать не только в корневые объекты, возвращает число прочитанных узлов
+//6. int OPC_ClientCallMethod(NodeID, value) - вызов метода по никальному ID (нгапример, NodeID=62541) и строковым параметров
+//7. int OPC_UA_Client_Service_browse() - читает всю структуру иерархии дерева с сервера для возможности писать не только в корневые объекты, возвращает число прочитанных узлов
+//8. int OPC_ClientSubscriptions - выполняет подписку на все перменные, ранее переданные через OPC_ClientSubscriptionAddVariable. Параметр - частота опроса, мсек, т.е. 1000=1с
+//9. OPC_ClientSubscriptionAddVariable - добавляет в подписку (выполнять до OPC_ClientSubscriptions) одну переменную (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ)
+
 
 
 //сделать:
-//tutorial_server_monitoreditems - подписка на изменение сервера (callback)                                     -
 //tutorial_server_events - триггеры и события                                                                   -
-
-//см. приходит nodeId !
-static void dataChangeNotificationCallback(UA_Server * server, UA_UInt32 monitoredItemId, void* monitoredItemContext, const UA_NodeId * nodeId,void* nodeContext, UA_UInt32 attributeId, const UA_DataValue * value) 
-{
-    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Received Notification");
-}
-
-static void  addMonitoredItemToCurrentTimeVariable(UA_Server * server) 
-{
-    UA_NodeId currentTimeNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_SERVER_SERVERSTATUS_CURRENTTIME);
-    UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(currentTimeNodeId);
-    monRequest.requestedParameters.samplingInterval = 100.0; /* 100 ms interval */
-    UA_Server_createDataChangeMonitoredItem(server, UA_TIMESTAMPSTORETURN_SOURCE, monRequest, NULL, dataChangeNotificationCallback);
-}
-//СДЕЛАТЬ!
-
+//Про методы: например можно сделать метод - создать игрока передать туда имя и тип и в ответ получить ок или не ок, можно и в ответ имя получить
+// UA_NODEID_NUMERIC / UA_NODEID_STRING 0 - NAMESPACE NS0
 
 
 //интересно:
@@ -217,12 +206,43 @@ void SendValueChange(const std::wstring& strObj, const std::wstring& strVar, con
 //SendValueChange(1000, 3.141516);
 
 
+
+
+
+// Call this function from a Untiy script
+extern "C"
+{
+    typedef void(*ServerValueChangeCallback)(const char* message1, int size1, const char* message2, int size2, unsigned int monID, double value);
+    static ServerValueChangeCallback ServerCallbackValueChangeFunction = nullptr;
+    __declspec(dllexport) void RegisterServerValueChangeCallback(ServerValueChangeCallback callback);
+}
+void RegisterServerValueChangeCallback(ServerValueChangeCallback callback)
+{
+    ServerCallbackValueChangeFunction = callback;
+}
+//nothrow
+
+void ServerSendValueChange(const std::wstring& strObj, const std::wstring& strVar, const unsigned int& monID, const double& value)
+{
+    std::string s1(strObj.begin(), strObj.end());
+    const char* tmsg1 = s1.c_str();
+    std::string s2(strVar.begin(), strVar.end());
+    const char* tmsg2 = s2.c_str();
+    if (ServerCallbackValueChangeFunction != nullptr)
+    {
+        ServerCallbackValueChangeFunction(tmsg1, (int)strlen(tmsg1), tmsg2, (int)strlen(tmsg2), (unsigned int)monID, (double)value);
+    }
+}
+//ServerSendValueChange(1000, 3.141516);
+
+
+
  
  
 
 //---------------------------------SERVER---------------------------------------
 
-//1. int OPCserverCreate () - создание сервера OPC
+//1. int OPC_ServerCreate () - создание сервера OPC
 extern "C" __declspec(dllexport) int OPC_ServerCreate()
 {
     SendLog(L"debug DLL:OPCserverCreate ...", 0);
@@ -258,9 +278,7 @@ extern "C" __declspec(dllexport) int OPC_ServerUpdate()
     return 0;
 }
 
-//3. int OPC_ServerAddVariable (description, displayName) // (char*)"the.answer", (char*)"the answer"
-//type==0 - double
-//type==1 - string
+//3. int OPC_ServerAddVariableDouble (objectname, varname, type)  - добавить переменную (ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ТИП (0-double/1-int)
 extern "C" __declspec(dllexport)  int OPC_ServerAddVariable(char* objectString, char* descriptionString, char* displayNameString, int type)
 {
     std::string objectName(objectString);
@@ -334,7 +352,7 @@ extern "C" __declspec(dllexport)  int OPC_ServerAddVariable(char* objectString, 
     return 0;
 }
 
-//4. int OPC_ServerWriteValueDouble (description, value) //(char*)"the.answer", double
+//4. int OPC_ServerWriteValueDouble (objectname, varname, value)  - изменить переменную типа DOUBLE (ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ЗНАЧЕНИЕ)
 extern "C" __declspec(dllexport)  int OPC_ServerWriteValueDouble(char* objectString, char* descriptionString, double value)
 {
     UA_NodeId myDoubleNodeId;
@@ -383,7 +401,7 @@ extern "C" __declspec(dllexport)  int OPC_ServerWriteValueDouble(char* objectStr
 
 
 
-//5. double OPC_ServerReadValueDouble (description) //(char*)"the.answer"
+//5. double OPC_ServerReadValueDouble (objectname, varname) - прочитать напрямую переменную типа DOUBLE (ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ)
 extern "C" __declspec(dllexport) double OPC_ServerReadValueDouble(char* objectString, char* descriptionString)
 {
     UA_NodeId myDoubleNodeId;
@@ -411,7 +429,7 @@ extern "C" __declspec(dllexport) double OPC_ServerReadValueDouble(char* objectSt
 
 
 
-//6. int OPC_ServerWriteValueString (objectname, description, value) 
+//6. int OPC_ServerWriteValueString - изменить переменную типа STRING (ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ЗНАЧЕНИЕ)
 extern "C" __declspec(dllexport)  int OPC_ServerWriteValueString(char* objectString, char* descriptionString, char* value)
 {
     UA_NodeId myDoubleNodeId;
@@ -452,7 +470,7 @@ extern "C" __declspec(dllexport)  int OPC_ServerWriteValueString(char* objectStr
 }
 
 
-//7. double OPC_ServerReadValueString (objectname, description) 
+//7. int OPC_ServerReadValueString - прочитать напрямую переменную типа STRING (ВОЗРАЩАЕМОЕ ЗНАЧЕНИЕ, ВОЗВРАЩАЕМАЯ ДЛИННА,  ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ)
 extern "C" __declspec(dllexport) int OPC_ServerReadValueString(char* returnString, int returnStringLength, char* objectString, char* descriptionString)
 {
     UA_NodeId myDoubleNodeId;
@@ -494,7 +512,7 @@ extern "C" __declspec(dllexport) int OPC_ServerReadValueString(char* returnStrin
 
 
 
-//8. int OPC_ServerShutdown
+//8. int OPC_ServerShutdown - выключение сервера
 extern "C" __declspec(dllexport) int OPC_ServerShutdown()
 {
     SendLog(L"debug DLL:OPC_ServerShutdown... ", 0);
@@ -513,10 +531,84 @@ extern "C" __declspec(dllexport) int OPC_ServerShutdown()
 }
 
 
+//Обработчик изменения переменной для сервера
+static void serverDataChangeNotificationCallback(UA_Server* server, UA_UInt32 monitoredItemId, void* monitoredItemContext, const UA_NodeId* nodeId, void* nodeContext, UA_UInt32 attributeId, const UA_DataValue* value)
+{
+    //см. приходит nodeId !
+    //SendLog(L"debug DLL:serverDataChangeNotificationCallback... ", 0);
+    
+    unsigned int t = nodeId->identifier.numeric;
+
+    if (allServerRegisteredSubscription.count(t) > 0)
+    {
+        if (value->hasValue == true)
+        {
+            if (UA_Variant_hasScalarType(&value->value, &UA_TYPES[UA_TYPES_DOUBLE]))
+            {
+                UA_Double severity = *(UA_Double*)value->value.data;
+                std::string oname = allServerRegisteredSubscription[t]->objectname;
+                std::string vname = allServerRegisteredSubscription[t]->variablename;
+
+                std::wstring woname(oname.begin(), oname.end());
+                std::wstring wvname(vname.begin(), vname.end());
+                ServerSendValueChange(woname, wvname, t, severity);
+                //SendLog(L"Notification1 double", 0);
+            }
+            else if (UA_Variant_hasScalarType(&value->value, &UA_TYPES[UA_TYPES_LOCALIZEDTEXT]))
+            {
+                UA_LocalizedText* lt = (UA_LocalizedText*)value->value.data;
+                SendLog(L"serverDataChangeNotificationCallback: Notification1 text", 0);
+            }
+        }
+    }
+    else
+    {
+        std::wstringstream ss1;
+        ss1 << L"serverDataChangeNotificationCallback!";
+        std::wstring str1 = ss1.str();
+        SendLog(str1, 0);
+    }
+}
+
+//11. Добавить подписку на изменение переменной для сервера //11. int OPC_ServerSubscription(objectString, varNameString, interval) - (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ИНТЕРВАЛ 1000=1с)
+extern "C" __declspec(dllexport) int OPC_ServerSubscription(char* objectString, char* varNameString, double interval)
+{
+    SendLog(L"debug DLL:OPC_ServerSubscription... ", 0);
+
+    UA_NodeId myDoubleNodeId;
+    std::string objectName(objectString);
+    std::string attributeName(varNameString);
+
+    //если это атрибут объекта
+    if (objectName != "")
+    {
+        myDoubleNodeId = ObjectNodes[objectName]->VariableNode_NameID[attributeName];
+    }
+    else
+    {
+        myDoubleNodeId = UA_NODEID_STRING(0, varNameString);
+    }
+
+    //UA_NodeId currentTimeNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_SERVER_SERVERSTATUS_CURRENTTIME);
+    UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(myDoubleNodeId);
+    monRequest.requestedParameters.samplingInterval = interval; // 100.0; /* 100 ms interval */
+    UA_Server_createDataChangeMonitoredItem(server, UA_TIMESTAMPSTORETURN_SOURCE, monRequest, NULL, serverDataChangeNotificationCallback); //UA_TIMESTAMPSTORETURN_BOTH
+
+    SubscriptionElementClass* temp = new SubscriptionElementClass();
+    temp->objectname = objectName;
+    temp->variablename = attributeName;
+
+    allServerRegisteredSubscription[myDoubleNodeId.identifier.numeric] = temp;
+
+    return 0;
+}
+
+
 
 //---------------------------------CLIENT---------------------------------------
 UA_Client* client;
-//1. int OPC_ClientConnect (url) // "opc.tcp://localhost:4840"
+
+//1. int OPC_ClientConnect (url) - ПОДКЛЮЧЕНИЕ К СЕРВЕРУ "opc.tcp://localhost:4840"
 extern "C" __declspec(dllexport) int OPC_ClientConnect(char* url)
 {
     SendLog(L"debug DLL:OPC_ClientConnect... ", 0);
@@ -534,7 +626,7 @@ extern "C" __declspec(dllexport) int OPC_ClientConnect(char* url)
     return 0;
 }
 
-//2. int OPC_ClientWriteValueDouble (description, value) //(char*)"the.answer", double
+//2. int OPC_ClientWriteValueDouble (objectname, varname, value) - записать переменную типа DOUBLE (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ЗНАЧЕНИЕ)
 extern "C" __declspec(dllexport) int OPC_ClientWriteValueDouble(char* object2, char* description, double _value)
 {
     UA_NodeId myDoubleNodeId;
@@ -569,7 +661,7 @@ extern "C" __declspec(dllexport) int OPC_ClientWriteValueDouble(char* object2, c
     return 0;
 }
 
-//3. double OPC_ClientReadValueDouble (description) //(char*)"the.answer"
+//3. double OPC_ClientReadValueDouble (objectname, varname) - ПРЯМОЕ чтение переменной типа DOUBLE (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ)
 extern "C" __declspec(dllexport) double OPC_ClientReadValueDouble(char* object2, char* description)
 {
     UA_NodeId myDoubleNodeId;
@@ -616,7 +708,7 @@ extern "C" __declspec(dllexport) int OPC_ClientUpdate()
     return 0;
 }
 
-//5. int OPC_ClientDelete()
+//5. int OPC_ClientDelete() - выключение клиента
 extern "C" __declspec(dllexport) int OPC_ClientDelete()
 {
     UA_Client_disconnect(client);
@@ -693,6 +785,7 @@ static void addHelloWorldMethod(UA_Server* server, unsigned int nodeID, char* na
         1, &inputArgument, 1, &outputArgument, NULL, NULL);
 }
 
+//9. int OPC_ServerCreateMethod (nodeID, name, displayName, description) - создание метода (УНИКАЛЬЫНЙ НОМЕР, ИМЯ МЕТОДА, НАЗВАНИЕ МЕТОДА, ОПИСАНИЕ)
 extern "C" __declspec(dllexport) int OPC_ServerCreateMethod(unsigned int nodeID, char* name, char* displayName, char* description)
 {
     addHelloWorldMethod(server, nodeID, name, displayName, description);
@@ -702,6 +795,7 @@ extern "C" __declspec(dllexport) int OPC_ServerCreateMethod(unsigned int nodeID,
 
 
 //-----------------------------------Вызов метода  из сервера-----------------------------------------------------
+//10. int OPC_ServerCallMethod - вызов метода из сервера (nodeID, value) - (УНИКАЛЬЫНЙ НОМЕР, ЗНАЧЕНИЕ)
 extern "C" __declspec(dllexport) int OPC_ServerCallMethod(unsigned int NodeId, char* value)
 {
     
@@ -731,6 +825,7 @@ extern "C" __declspec(dllexport) int OPC_ServerCallMethod(unsigned int NodeId, c
 //-----------------------------------Вызов метода  из сервера-----------------------------------------------------
 
 //-----------------------------------Вызов метода  из клиента-----------------------------------------------------
+//6. int OPC_ClientCallMethod(NodeID, value) - вызов метода по никальному ID (нгапример, NodeID=62541) и строковым параметров
 extern "C" __declspec(dllexport) int OPC_ClientCallMethod(unsigned int NodeId, char* value)
 {
 #ifdef UA_ENABLE_METHODCALLS
@@ -764,8 +859,8 @@ extern "C" __declspec(dllexport) int OPC_ClientCallMethod(unsigned int NodeId, c
 
 
 
-//подписка на мониторинг переменной и события
-//tutorial_client_events
+//----------------------------------------подписка на мониторинг переменной и события для клиента------------------------------------------------
+//Обработчик см. tutorial_client_events
 #ifdef UA_ENABLE_SUBSCRIPTIONS
 static void handler_TheAnswerChanged(UA_Client* client, UA_UInt32 subId, void* subContext, UA_UInt32 monId, void* monContext, UA_DataValue* value) 
 {
@@ -804,13 +899,7 @@ static void handler_TheAnswerChanged(UA_Client* client, UA_UInt32 subId, void* s
 }
 #endif
 
-
-
-
-//----------------------------------------подписка на мониторинг переменной и события------------------------------------------------
-
-
-
+//9. OPC_ClientSubscriptionAddVariable - добавляет в подписку (выполнять до OPC_ClientSubscriptions) одну переменную (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ)
 extern "C" __declspec(dllexport) void OPC_ClientSubscriptionAddVariable(char* _objectname, char* _varname)
 {
     std::string objectname(_objectname);
@@ -823,11 +912,8 @@ extern "C" __declspec(dllexport) void OPC_ClientSubscriptionAddVariable(char* _o
     allClientSubscription.push_back(temp);
     return;
 }
-
-
-
 /////////////
-
+//8. int OPC_ClientSubscriptions - выполняет подписку на все перменные, ранее переданные через OPC_ClientSubscriptionAddVariable. Параметр - частота опроса, мсек, т.е. 1000=1с
 extern "C" __declspec(dllexport) int OPC_ClientSubscriptions(double interval)
 {
     SendLog(L"OPC_ClientSubscriptions", 0);
@@ -845,7 +931,7 @@ extern "C" __declspec(dllexport) int OPC_ClientSubscriptions(double interval)
         SendLog(L"Create subscription succeeded", 0);
     }
 
-    int count = allClientSubscription.size();
+    int count = (int)allClientSubscription.size();
 
     UA_MonitoredItemCreateRequest *items = new UA_MonitoredItemCreateRequest[count];
     UA_UInt32 *newMonitoredItemIds = new UA_UInt32[count];
@@ -927,19 +1013,9 @@ extern "C" __declspec(dllexport) int OPC_ClientSubscriptions(double interval)
    
     return 0;
 }
-
-
 //////////////////
 
-
-
-
-
-
-
-
 //--------------------------------------------Чтение структуры------------------------------------------------------------------
-
 void Client_Service_browse_recursive(UA_NodeId browse_node, std::string ParentName)
 {
     UA_BrowseRequest bReq;
@@ -1088,7 +1164,7 @@ void Client_Service_browse_recursive(UA_NodeId browse_node, std::string ParentNa
     UA_BrowseResponse_clear(&bResp);
 }
 
-//читает всю структуру иерархии дерева с сервера для возможности писать не только в корневые объекты, возвращает число прочитанных узлов
+//7. int OPC_UA_Client_Service_browse() - читает всю структуру иерархии дерева с сервера для возможности писать не только в корневые объекты, возвращает число прочитанных узлов
 extern "C" __declspec(dllexport)  int OPC_UA_Client_Service_browse()
 {
     //чистим дерево связей
@@ -1102,494 +1178,9 @@ extern "C" __declspec(dllexport)  int OPC_UA_Client_Service_browse()
 
     return 0;
 }
-
 //---------------------------------------------------------------------------------------------------------------------------------------
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//--------------OLD and TEST------------------------------------------------------------
-
 /*
-extern "C" __declspec(dllexport) unsigned int OPC_ClientSubscription(char* object, char* varname, double interval)
-{
-    // The first publish request should return the initial value of the variable
-    //UA_Client_run_iterate(client, 1000);
-
-    SendLog(L"OPC_ClientSubscription", 0);
-
-    // Create a subscription
-    UA_CreateSubscriptionRequest request = UA_CreateSubscriptionRequest_default();
-    request.requestedPublishingInterval = interval;
-    UA_CreateSubscriptionResponse response = UA_Client_Subscriptions_create(client, request, NULL, NULL, NULL);
-
-    UA_UInt32 subId = response.subscriptionId;
-    if (response.responseHeader.serviceResult == UA_STATUSCODE_GOOD)
-    {
-        //printf("Create subscription succeeded, id %u\n", subId);
-        SendLog(L"Create subscription succeeded", 0);
-    }
-
-    UA_NodeId myDoubleNodeId;
-    std::string objectName(object);
-    std::string attributeName(varname);
-
-    //если это атрибут объекта
-    if (objectName != "")
-    {
-        myDoubleNodeId = ClientObjectNodes[objectName]->VariableNode_NameID[attributeName];
-    }
-    else
-    {
-        myDoubleNodeId = UA_NODEID_STRING(0, varname);
-    }
-
-    //UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(UA_NODEID_STRING(0, varname));
-    UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(myDoubleNodeId);
-
-    UA_MonitoredItemCreateResult monResponse = UA_Client_MonitoredItems_createDataChange(client, response.subscriptionId, UA_TIMESTAMPSTORETURN_BOTH,monRequest, NULL, handler_TheAnswerChanged, NULL);
-    
-    if (monResponse.statusCode == UA_STATUSCODE_GOOD)
-    {
-        SendLog(L"Monitoring .. ok", 0);
-        //printf("Monitoring 'the.answer', id %u\n", monResponse.monitoredItemId);
-    }
-    else
-    {
-        SendLog(L"Monitoring .. false", 0);
-    }
-
-    // The first publish request should return the initial value of the variable
-    UA_Client_run_iterate(client, 1000);
-
-    UA_UInt32 monId = monResponse.monitoredItemId;
-    return monId;
-
-    //UA_MonitoredItemCreateResult_clear(&result);
-    //UA_Client_Subscriptions_deleteSingle(client, response.subscriptionId);
-    //UA_Array_delete(filter.selectClauses, nSelectClauses, &UA_TYPES[UA_TYPES_SIMPLEATTRIBUTEOPERAND]);
-}
-*/
-
- /*
- //tutorial_server_object.c
-//UA_NodeId pumpRpmId;
-static void manuallyDefinePump(UA_Server* server)
-{
-    std::string pumpName = "Pump (Manual)";
-
-    {
-        UA_NodeId pumpId; // get the nodeid assigned by the server
-        UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
-        oAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)pumpName.c_str()); //(char*)"Pump (Manual)"
-        UA_Server_addObjectNode(server, UA_NODEID_NULL,
-            UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
-            UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
-            UA_QUALIFIEDNAME(1, (char*)"Pump (Manual)"), UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE),
-            oAttr, NULL, &pumpId);
-
-        ObjectNodeVariables* newObjectNode = new ObjectNodeVariables;
-        newObjectNode->nodeId = pumpId;
-        ObjectNodes[pumpName] = newObjectNode;
-    }
-
-    {
-        std::string VariableName = "ManufacturerName";
-        UA_NodeId VariableNodeId;
-        UA_NodeId ObjectNodeId = ObjectNodes[pumpName]->nodeId;
-
-
-        UA_VariableAttributes mnAttr = UA_VariableAttributes_default;
-        UA_String manufacturerName = UA_STRING((char*)"Pump King Ltd.");
-        UA_Variant_setScalar(&mnAttr.value, &manufacturerName, &UA_TYPES[UA_TYPES_STRING]);
-        mnAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)VariableName.c_str()); //"ManufacturerName"
-        UA_Server_addVariableNode(server, UA_NODEID_NULL, ObjectNodeId, //pumpId
-            UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-            UA_QUALIFIEDNAME(1, (char*)VariableName.c_str()),
-            UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), mnAttr, NULL, &VariableNodeId); //, NULL)
-        ObjectNodes[pumpName]->VariableNode_NameID[VariableName] = VariableNodeId;
-    }
-
-    {
-        std::string VariableName = "ModelName";
-        UA_NodeId VariableNodeId;
-        UA_NodeId ObjectNodeId = ObjectNodes[pumpName]->nodeId;
-
-        UA_VariableAttributes modelAttr = UA_VariableAttributes_default;
-        UA_String modelName = UA_STRING((char*)"Mega Pump 3000");
-        UA_Variant_setScalar(&modelAttr.value, &modelName, &UA_TYPES[UA_TYPES_STRING]);
-        modelAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)VariableName.c_str());
-        UA_Server_addVariableNode(server, UA_NODEID_NULL, ObjectNodeId, //pumpId
-            UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-            UA_QUALIFIEDNAME(1, (char*)VariableName.c_str()),
-            UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), modelAttr, NULL, &VariableNodeId); //, NULL)
-        ObjectNodes[pumpName]->VariableNode_NameID[VariableName] = VariableNodeId;
-    }
-
-    {
-        std::string VariableName = "Status";
-        UA_NodeId VariableNodeId;
-        UA_NodeId ObjectNodeId = ObjectNodes[pumpName]->nodeId;
-
-        UA_VariableAttributes statusAttr = UA_VariableAttributes_default;
-        UA_Boolean status = true;
-        UA_Variant_setScalar(&statusAttr.value, &status, &UA_TYPES[UA_TYPES_BOOLEAN]);
-        statusAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)VariableName.c_str()); //(char*)"Status"
-        UA_Server_addVariableNode(server, UA_NODEID_NULL, ObjectNodeId, //pumpId
-            UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-            UA_QUALIFIEDNAME(1, (char*)VariableName.c_str()),
-            UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), statusAttr, NULL, &VariableNodeId);
-        ObjectNodes[pumpName]->VariableNode_NameID[VariableName] = VariableNodeId;
-    }
-
-    {
-        std::string VariableName = "MotorRPM";
-        UA_NodeId VariableNodeId;
-        UA_NodeId ObjectNodeId = ObjectNodes[pumpName]->nodeId;
-
-        UA_VariableAttributes rpmAttr = UA_VariableAttributes_default;
-        UA_Double rpm = 50.1;
-        UA_Variant_setScalar(&rpmAttr.value, &rpm, &UA_TYPES[UA_TYPES_DOUBLE]);
-        rpmAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)VariableName.c_str()); //(char*)"MotorRPM"
-        rpmAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-        UA_Server_addVariableNode(server, UA_NODEID_NULL, ObjectNodeId, //pumpId
-            UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-            UA_QUALIFIEDNAME(1, (char*)VariableName.c_str()),
-            UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), rpmAttr, NULL, &VariableNodeId); //&pumpRpmId
-        ObjectNodes[pumpName]->VariableNode_NameID[VariableName] = VariableNodeId;
-    }
-}
-extern "C" __declspec(dllexport)  int OPC_TestObjectPump()
-{
-    manuallyDefinePump(server);
-    
-
-    //иначе client из примеров - чтение списка всего на сервере и оттуда определяем ID - browseAll
-    //или получаем через вызов метода 
-
-
-    std::string objectName = "Pump (Manual)";
-    std::string VariableName = "MotorRPM";
-    UA_NodeId pumpRpmId = ObjectNodes[objectName]->VariableNode_NameID[VariableName];
-
-    //запись из сервера
-    if (false)
-    {
-        UA_NodeId myDoubleNodeId = pumpRpmId;
-        // Write a different double value 
-UA_Double myDouble = 456.789;
-UA_Variant myVar;
-UA_Variant_init(&myVar);
-UA_Variant_setScalar(&myVar, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
-UA_Server_writeValue(server, myDoubleNodeId, myVar);
-// Set the status code of the value to an error code. The function
- // UA_Server_write provides access to the raw service. The above
- // UA_Server_writeValue is syntactic sugar for writing a specific node
- // attribute with the write service. 
-UA_WriteValue wv;
-UA_WriteValue_init(&wv);
-wv.nodeId = myDoubleNodeId;
-wv.attributeId = UA_ATTRIBUTEID_VALUE;
-wv.value.status = UA_STATUSCODE_BADNOTCONNECTED;
-wv.value.hasStatus = true;
-UA_Server_write(server, &wv);
-// Reset the variable to a good statuscode with a value 
-wv.value.hasStatus = false;
-wv.value.value = myVar;
-wv.value.hasValue = true;
-UA_Server_write(server, &wv);
-    }
-
-    //запись из клиента
-    if (true)
-    {
-        UA_NodeId myDoubleNodeId = pumpRpmId;
-        UA_Double myDouble = 321.777;
-        UA_Variant* myVariant = UA_Variant_new();
-        UA_Variant_setScalarCopy(myVariant, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
-        UA_Client_writeValueAttribute(client, myDoubleNodeId, myVariant);
-        UA_Variant_delete(myVariant);
-    }
-
-    //browseAll();
-
-
-    return 0;
-}
- 
- */
- 
-
-    //UA_Server_readObjectProperty
-    //UA_Server_writeObjectProperty
-/*
-    //defineObjectTypes(server);
-    //addPumpObjectInstance(server, (char *)"pump2");
-    //addPumpObjectInstance(server, (char*)"pump3");
-    //addPumpTypeConstructor(server);
-    //addPumpObjectInstance(server, (char*)"pump4");
-    //addPumpObjectInstance(server, (char*)"pump5");
-
-// predefined identifier for later use
-UA_NodeId pumpTypeId = {1, UA_NODEIDTYPE_NUMERIC, {1001}};
-
-static void defineObjectTypes(UA_Server *server)
-{
-    // Define the object type for "Device"
-    UA_NodeId deviceTypeId; // get the nodeid assigned by the server
-    UA_ObjectTypeAttributes dtAttr = UA_ObjectTypeAttributes_default;
-    dtAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"DeviceType");
-    UA_Server_addObjectTypeNode(server, UA_NODEID_NULL,
-                                UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE),
-                                UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE),
-                                UA_QUALIFIEDNAME(1, (char*)"DeviceType"), dtAttr,
-                                NULL, &deviceTypeId);
-
-    UA_VariableAttributes mnAttr = UA_VariableAttributes_default;
-    mnAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"ManufacturerName");
-    UA_NodeId manufacturerNameId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, deviceTypeId,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, (char*)"ManufacturerName"),
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), mnAttr, NULL, &manufacturerNameId);
-    // Make the manufacturer name mandatory //
-    UA_Server_addReference(server, manufacturerNameId,
-                           UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
-                           UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
-
-
-    UA_VariableAttributes modelAttr = UA_VariableAttributes_default;
-    modelAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"ModelName");
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, deviceTypeId,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, (char*)"ModelName"),
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), modelAttr, NULL, NULL);
-
-    // Define the object type for "Pump" //
-    UA_ObjectTypeAttributes ptAttr = UA_ObjectTypeAttributes_default;
-    ptAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"PumpType");
-    UA_Server_addObjectTypeNode(server, pumpTypeId,
-                                deviceTypeId, UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE),
-                                UA_QUALIFIEDNAME(1, (char*)"PumpType"), ptAttr,
-                                NULL, NULL);
-
-    UA_VariableAttributes statusAttr = UA_VariableAttributes_default;
-    statusAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"Status");
-    statusAttr.valueRank = UA_VALUERANK_SCALAR;
-    UA_NodeId statusId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, pumpTypeId,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, (char*)"Status"),
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), statusAttr, NULL, &statusId);
-    // Make the status variable mandatory //
-    UA_Server_addReference(server, statusId,
-                           UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
-                           UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
-
-    UA_VariableAttributes rpmAttr = UA_VariableAttributes_default;
-    rpmAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"MotorRPM");
-    rpmAttr.valueRank = UA_VALUERANK_SCALAR;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, pumpTypeId,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, (char*)"MotorRPMs"),
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), rpmAttr, NULL, NULL);
-}
-
-
-
-static void addPumpObjectInstance(UA_Server *server, char *name)
-{
-    UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
-    oAttr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", name);
-    UA_Server_addObjectNode(server, UA_NODEID_NULL,
-                            UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
-                            UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
-                            UA_QUALIFIEDNAME(1, name),
-                            pumpTypeId, // this refers to the object type identifier
-                            oAttr, NULL, NULL);
-}
-
-
-static UA_StatusCode pumpTypeConstructor(UA_Server* server, const UA_NodeId* sessionId, void* sessionContext, const UA_NodeId* typeId, void* typeContext, const UA_NodeId* nodeId, void** nodeContext)
-{
-    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "New pump created");
-
-    // Find the NodeId of the status child variable
-    UA_RelativePathElement rpe;
-    UA_RelativePathElement_init(&rpe);
-    rpe.referenceTypeId = UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT);
-    rpe.isInverse = false;
-    rpe.includeSubtypes = false;
-    rpe.targetName = UA_QUALIFIEDNAME(1, (char*)"Status");
-
-    UA_BrowsePath bp;
-    UA_BrowsePath_init(&bp);
-    bp.startingNode = *nodeId;
-    bp.relativePath.elementsSize = 1;
-    bp.relativePath.elements = &rpe;
-
-    UA_BrowsePathResult bpr = UA_Server_translateBrowsePathToNodeIds(server, &bp);
-    if (bpr.statusCode != UA_STATUSCODE_GOOD || bpr.targetsSize < 1)  return bpr.statusCode;
-
-    // Set the status value
-    UA_Boolean status = true;
-    UA_Variant value;
-    UA_Variant_setScalar(&value, &status, &UA_TYPES[UA_TYPES_BOOLEAN]);
-    UA_Server_writeValue(server, bpr.targets[0].targetId.nodeId, value);
-    UA_BrowsePathResult_clear(&bpr);
-
-    // At this point we could replace the node context ..
-
-    return UA_STATUSCODE_GOOD;
-}
-
-static void addPumpTypeConstructor(UA_Server* server)
-{
-    UA_NodeTypeLifecycle lifecycle;
-    lifecycle.constructor = pumpTypeConstructor;
-    lifecycle.destructor = NULL;
-    UA_Server_setNodeTypeLifecycle(server, pumpTypeId, lifecycle);
-}
-*/
-
-
-//Вывод вструктуры всего на сервере
-/*
-void browseAll()
-{
-    SendLog(L"Browsing nodes in objects folder", 0);
-
-    UA_BrowseRequest bReq;
-    UA_BrowseRequest_init(&bReq);
-    bReq.requestedMaxReferencesPerNode = 0;
-    bReq.nodesToBrowse = UA_BrowseDescription_new();
-    bReq.nodesToBrowseSize = 1;
-    bReq.nodesToBrowse[0].nodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER); // browse objects folder
-    bReq.nodesToBrowse[0].resultMask = UA_BROWSERESULTMASK_ALL; // return everything
-    UA_BrowseResponse bResp = UA_Client_Service_browse(client, bReq);
-    //printf("%-9s %-16s %-16s %-16s\n", "NAMESPACE", "NODEID", "BROWSE NAME", "DISPLAY NAME");
-    SendLog(L"NAMESPACE, NODEID, BROWSE NAME, DISPLAY NAME", 0);
-    for (size_t i = 0; i < bResp.resultsSize; ++i)
-    {
-        for (size_t j = 0; j < bResp.results[i].referencesSize; ++j)
-        {
-            UA_ReferenceDescription* ref = &(bResp.results[i].references[j]);
-            if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_NUMERIC)
-            {
-                //printf("%-9u %-16u %-16.*s %-16.*s\n", ref->nodeId.nodeId.namespaceIndex,
-                //    ref->nodeId.nodeId.identifier.numeric, (int)ref->browseName.name.length,
-                //    ref->browseName.name.data, (int)ref->displayName.text.length,
-                //    ref->displayName.text.data);
-                UA_UInt16 a = ref->nodeId.nodeId.namespaceIndex;
-                UA_UInt32 b = ref->nodeId.nodeId.identifier.numeric;
-                int c = (int)ref->browseName.name.length;
-                UA_Byte* d = ref->browseName.name.data;
-                int e = (int)ref->displayName.text.length;
-                UA_Byte* f = ref->displayName.text.data;
-
-                char* convert = (char*)UA_malloc(sizeof(char) * ref->displayName.text.length + 1);
-                memcpy(convert, ref->displayName.text.data, ref->displayName.text.length);
-                convert[ref->displayName.text.length] = '\0';
-                std::wstringstream cls;
-                cls << convert;
-                std::wstring displayName = cls.str();
-
-                SendLog(displayName, 0);
-            }
-            else if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_STRING)
-            {
-                printf("%-9u %-16.*s %-16.*s %-16.*s\n", ref->nodeId.nodeId.namespaceIndex,
-                    (int)ref->nodeId.nodeId.identifier.string.length,
-                    ref->nodeId.nodeId.identifier.string.data,
-                    (int)ref->browseName.name.length, ref->browseName.name.data,
-                    (int)ref->displayName.text.length, ref->displayName.text.data);
-            }
-        }
-    }
-    UA_BrowseRequest_clear(&bReq);
-    UA_BrowseResponse_clear(&bResp);
-}
-*/
-
-
-/*
-//https://github.com/open62541/open62541/issues/3799
-UA_StatusCode find_datavariable_nodeid(UA_Server* server, const UA_NodeId object_id, const UA_QualifiedName name, UA_NodeId* node_id)
-{
-    UA_RelativePathElement rpe;
-    UA_RelativePathElement_init(&rpe);
-    rpe.referenceTypeId = UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT);
-    rpe.isInverse = false;
-    rpe.includeSubtypes = false;
-    rpe.targetName = name;
-
-    UA_BrowsePath bp;
-    UA_BrowsePath_init(&bp);
-    bp.startingNode = object_id;
-    bp.relativePath.elementsSize = 1;
-    bp.relativePath.elements = &rpe;
-
-    UA_BrowsePathResult bpr = UA_Server_translateBrowsePathToNodeIds(server, &bp);
-    UA_StatusCode rc = bpr.statusCode;
-    if (rc == UA_STATUSCODE_GOOD && bpr.targetsSize < 1)
-        rc = UA_STATUSCODE_BADNOMATCH;
-    if (rc == UA_STATUSCODE_GOOD)
-        *node_id = bpr.targets[0].targetId.nodeId;
-
-    UA_BrowsePathResult_deleteMembers(&bpr);
-
-    return rc;
-}
-*/
-
-
-static void addVariable(UA_Server* server)
-{
-    /* Define the attribute of the myInteger variable node */
-    UA_VariableAttributes attr = UA_VariableAttributes_default;
-    UA_Int32 myInteger = 42;
-    UA_Variant_setScalar(&attr.value, &myInteger, &UA_TYPES[UA_TYPES_INT32]);
-    attr.description = UA_LOCALIZEDTEXT((char*)"en - US", (char*)"theanswer");
-    attr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)"theanswer");
-    attr.dataType = UA_TYPES[UA_TYPES_INT32].typeId;
-    attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-
-    /* Add the variable node to the information model */
-    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(0, (char*)"AAA");
-    UA_QualifiedName myIntegerName = UA_QUALIFIEDNAME(1, (char*)"AAA");
-    UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
-    UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
-    UA_Server_addVariableNode(server, myIntegerNodeId, parentNodeId,
-        parentReferenceNodeId, myIntegerName,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, NULL);
-}
 
 
 static void addMatrixVariable(UA_Server* server) 
@@ -1620,171 +1211,4 @@ static void addMatrixVariable(UA_Server* server)
         UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
         attr, NULL, NULL);
 }
-
-
-//Now we change the value with the write service. This uses the same service
-//implementation that can also be reached over the network by an OPC UA client.
-static void writeVariable(UA_Server* server, int value) 
-{
-    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(0, (char*)"AAA");
-
-    /* Write a different integer value */
-    UA_Int32 myInteger = value;
-    UA_Variant myVar;
-    UA_Variant_init(&myVar);
-    UA_Variant_setScalar(&myVar, &myInteger, &UA_TYPES[UA_TYPES_INT32]);
-    UA_Server_writeValue(server, myIntegerNodeId, myVar);
-
-    /* Set the status code of the value to an error code. The function
-     * UA_Server_write provides access to the raw service. The above
-     * UA_Server_writeValue is syntactic sugar for writing a specific node
-     * attribute with the write service. */
-    UA_WriteValue wv;
-    UA_WriteValue_init(&wv);
-    wv.nodeId = myIntegerNodeId;
-    wv.attributeId = UA_ATTRIBUTEID_VALUE;
-    wv.value.status = UA_STATUSCODE_BADNOTCONNECTED;
-    wv.value.hasStatus = true;
-    UA_Server_write(server, &wv);
-
-    /* Reset the variable to a good statuscode with a value */
-    wv.value.hasStatus = false;
-    wv.value.value = myVar;
-    wv.value.hasValue = true;
-    UA_Server_write(server, &wv);
-}
-
-extern "C" __declspec(dllexport) int testServerCreate(int a, int b)
-{
-    SendLog(L"debug DLL:testServer", 0);
-
-    server = UA_Server_new();
-    UA_ServerConfig_setDefault(UA_Server_getConfig(server));
-    UA_ServerConfig* config = UA_Server_getConfig(server);
-    config->verifyRequestTimestamp = UA_RULEHANDLING_ACCEPT;
-    //config->applicationDescription.applicationName
-    #ifdef UA_ENABLE_WEBSOCKET_SERVER
-        UA_ServerConfig_addNetworkLayerWS(UA_Server_getConfig(server), 7681, 0, 0, NULL, NULL);
-    #endif
-
-    SendLog(L"debug DLL:addVariable", 0);
-    addVariable(server);
-    addMatrixVariable(server);
-    writeVariable(server,54321);
-
-    SendLog(L"debug DLL:UA_Server_run_startup", 0);
-    UA_StatusCode retval = UA_Server_run_startup(server);
-    if (retval != UA_STATUSCODE_GOOD)
-    {
-        goto cleanup;
-    }
-
-    return 0;
-
-    /*
-    retval = UA_Server_run_shutdown(server);
-    */
-
-cleanup:
-    UA_Server_delete(server);
-    return retval == UA_STATUSCODE_GOOD ? EXIT_SUCCESS : EXIT_FAILURE;
-}
-
-extern "C" __declspec(dllexport) int testServerUpdate()
-{
-    //writeVariable(server, a);
-    UA_UInt16 timeout = UA_Server_run_iterate(server, waitInternal);
-    return 0;
-}
-
-
-
-extern "C" __declspec(dllexport) int testServerWrite(int a)
-{
-    writeVariable(server, a);
-    return 0;
-}
-
-extern "C" __declspec(dllexport) int testServerRead()
-{
-    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(0, (char*)"AAA");
-    UA_Variant out;
-    UA_Variant_init(&out);
-    UA_Server_readValue(server, myIntegerNodeId, &out);
-    int p = *(UA_Int32*)out.data;
-    /* Clean up */
-    UA_Variant_clear(&out);
-    
-    return p;
-}
-
-
-
-
-
-
-//-------------------------------------------------------------------------------------------------------------
-
-
-
-extern "C" __declspec(dllexport) double testClient(char* description)
-{
-    UA_Client* client2 = UA_Client_new();
-    UA_ClientConfig_setDefault(UA_Client_getConfig(client2));
-    UA_StatusCode retval = UA_Client_connect(client2, "opc.tcp://localhost:4840");
-    if (retval != UA_STATUSCODE_GOOD) 
-    {
-        UA_Client_delete(client2);
-        return (int)retval;
-    }
-
-    // Read the value attribute of the node. UA_Client_readValueAttribute is a
-    // wrapper for the raw read service available as UA_Client_Service_read. 
-    UA_Variant value; // Variants can hold scalar values and arrays of any type 
-    UA_Variant_init(&value);
-
-    // NodeId of the variable holding the current time 
-    UA_NodeId myIntegerNodeId = UA_NODEID_STRING(0, description);//(char*)"AAA"
-    retval = UA_Client_readValueAttribute(client2, myIntegerNodeId, &value);
-
-    
-
-    double p = -4;
-    if (retval == UA_STATUSCODE_GOOD && UA_Variant_hasScalarType(&value, &UA_TYPES[UA_TYPES_DOUBLE])) //UA_TYPES_INT32
-    {
-        p = *(UA_Double*)value.data; //UA_Int32
-    }
-
-
-
-
-    {
-        UA_NodeId myDoubleNodeId = UA_NODEID_STRING(0, description);
-
-        //Write a different double value
-        UA_Double myDouble = 125;
-        //UA_Variant myVar;
-        //UA_Variant_init(&myVar);
-        //UA_Variant_setScalar(&myVar, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
-        //UA_Client_writeValueAttribute(client, myDoubleNodeId, &myVar);
-
-        UA_Variant* myVariant = UA_Variant_new();
-        UA_Variant_setScalarCopy(myVariant, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
-        UA_Client_writeValueAttribute(client2, myDoubleNodeId, myVariant);
-        UA_Variant_delete(myVariant);
-    }
-
-
-
-
-
-
-
-
-
-    // Clean up 
-    UA_Variant_clear(&value);
-    UA_Client_delete(client2); // Disconnects the client internally 
-    return p;
-}
-
+*/
