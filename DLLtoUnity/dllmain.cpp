@@ -104,30 +104,36 @@ std::map< unsigned int, SubscriptionElementClass*> allRegisteredSubscription;
 
 
 //сделать:
-//!!!!
-//1. ПОДПИСКА >1 ПЕРЕМЕННЫХ НЕ  РАБОТАЕТ, нужно подписывать сразу на несколько за один вызов на 1 callback 
-    //(open62541/tests/client/check_client_subscriptions.c)
-    //https://github.com/open62541/open62541/issues/2094
-    //!!!
-//2. tutorial_server_object - объектыи инстансы                                                                    +-
+//tutorial_server_monitoreditems - подписка на изменение сервера (callback)                                     -
+//tutorial_server_events - триггеры и события                                                                   -
 
- 
-    
+//см. приходит nodeId !
+static void dataChangeNotificationCallback(UA_Server * server, UA_UInt32 monitoredItemId, void* monitoredItemContext, const UA_NodeId * nodeId,void* nodeContext, UA_UInt32 attributeId, const UA_DataValue * value) 
+{
+    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Received Notification");
+}
+
+static void  addMonitoredItemToCurrentTimeVariable(UA_Server * server) 
+{
+    UA_NodeId currentTimeNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_SERVER_SERVERSTATUS_CURRENTTIME);
+    UA_MonitoredItemCreateRequest monRequest = UA_MonitoredItemCreateRequest_default(currentTimeNodeId);
+    monRequest.requestedParameters.samplingInterval = 100.0; /* 100 ms interval */
+    UA_Server_createDataChangeMonitoredItem(server, UA_TIMESTAMPSTORETURN_SOURCE, monRequest, NULL, dataChangeNotificationCallback);
+}
+//СДЕЛАТЬ!
+
 
 
 //интересно:
 //UA_StatusCode retval = UA_Client_connectUsername(client, "opc.tcp://localhost:4840", "paula", "paula123");    -
-//tutorial_server_monitoreditems - подписка на изменение сервера (callback)                                     -
 //pubsub_realtime - реалтайм                                                                                    -
 //tutorial_datatypes - строки / массивы / числа                                                                 -
 //server_inheritance - примеры объектов                                                                         -
 //tutorial_server_variabletype - массивы                                                                        -
-//client - чтение списка всего на сервере                                                                       -
 //client_find_servers - поиск сервера                                                                           -
 //client_subscription_loop - обработка закрытия сервера                                                         -
 //client_connect_loop - автоподключение                                                                         -
-//client - создание объектов, ччтение состава сервера и т.д.                                                    -
-//tutorial_server_events - триггеры и события                                                                   -
+
 
 
 
