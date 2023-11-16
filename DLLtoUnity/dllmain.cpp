@@ -260,14 +260,14 @@ extern "C" __declspec(dllexport) int OPC_ServerCreate()
     config->verifyRequestTimestamp = UA_RULEHANDLING_ACCEPT;
 
     //
-    UA_DurationRange publishingIntervalLimits;
-    publishingIntervalLimits.min = 10.0;
-    publishingIntervalLimits.max = 3600 * 1000.0;
-    config->publishingIntervalLimits = publishingIntervalLimits;
-    UA_DurationRange samplingIntervalLimits;
-    samplingIntervalLimits.min = 10.0;
-    samplingIntervalLimits.max = 24.0 * 3600.0 * 1000.0;
-    config->samplingIntervalLimits = samplingIntervalLimits;
+    // publishingIntervalLimits;
+    //publishingIntervalLimits.min = 10.0;
+    //publishingIntervalLimits.max = 3600 * 1000.0;
+    //config->publishingIntervalLimits = publishingIntervalLimits;
+    //UA_DurationRange samplingIntervalLimits;
+    //samplingIntervalLimits.min = 10.0;
+    //samplingIntervalLimits.max = 24.0 * 3600.0 * 1000.0;
+    //config->samplingIntervalLimits = samplingIntervalLimits;
     //UA_Server* server = UA_Server_new(config);
 
     #ifdef UA_ENABLE_WEBSOCKET_SERVER
