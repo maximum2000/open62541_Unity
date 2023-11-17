@@ -259,6 +259,12 @@ extern "C" __declspec(dllexport) int OPC_ServerCreate()
     config->buildInfo.manufacturerName = UA_STRING((char*)"LContent.ru");
     config->verifyRequestTimestamp = UA_RULEHANDLING_ACCEPT;
 
+
+    //config->publishingIntervalLimits.min = 10;
+    //config->publishingIntervalLimits.max = 3600 * 1000.0;
+    //config->samplingIntervalLimits.min = 10;
+    //config->samplingIntervalLimits.max = 24.0 * 3600.0 * 1000.0;
+
     //
     // publishingIntervalLimits;
     //publishingIntervalLimits.min = 10.0;
