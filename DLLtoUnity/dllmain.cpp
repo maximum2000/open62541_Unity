@@ -15,6 +15,7 @@ email                : Maxim.Gammer@yandex.ru
 #include <vector>
 
 //server
+//#include <open62541/client.h>
 #include <open62541/client_config_default.h>
 #include <open62541/client_highlevel.h>
 #include <open62541/plugin/log_stdout.h>
@@ -107,6 +108,7 @@ std::map< unsigned int, SubscriptionElementClass*> allServerRegisteredSubscripti
 //7. int OPC_UA_Client_Service_browse() - читает всю структуру иерархии дерева с сервера для возможности писать не только в корневые объекты, возвращает число прочитанных узлов
 //8. int OPC_ClientSubscriptions - выполняет подписку на все перменные, ранее переданные через OPC_ClientSubscriptionAddVariable. Параметр - частота опроса, мсек, т.е. 1000=1с
 //9. OPC_ClientSubscriptionAddVariable - добавляет в подписку (выполнять до OPC_ClientSubscriptions) одну переменную (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ)
+//10. OPC_Client_findServers ()
 
 
 
@@ -1205,6 +1207,92 @@ extern "C" __declspec(dllexport) void OPC_ClientSubscriptionAddVariable(char* _o
     allClientSubscription.push_back(temp);
     return;
 }
+
+
+//10. OPC_Client_findServers()
+#define DISCOVERY_SERVER_ENDPOINT "opc.tcp://localhost:4840"
+extern "C" __declspec(dllexport) int OPC_Client_findServers()
+{
+//    #ifdef UA_ENABLE_DISCOVERY
+    UA_ServerOnNetwork* serverOnNetwork = NULL;
+    size_t serverOnNetworkSize = 0;
+
+    UA_Client* client = UA_Client_new();
+    UA_ClientConfig_setDefault(UA_Client_getConfig(client));
+    UA_StatusCode retval = UA_Client_findServersOnNetwork(client, DISCOVERY_SERVER_ENDPOINT, 0, 0, 0, NULL, &serverOnNetworkSize, &serverOnNetwork);
+    if (retval != UA_STATUSCODE_GOOD) 
+    {
+       // UA_LOG_ERROR(UA_Log_Stdout, UA_LOGCATEGORY_SERVER,
+       //     "Could not call FindServersOnNetwork service. "
+       //     "Is the discovery server started? StatusCode %s",
+       //     UA_StatusCode_name(retval));
+
+        std::wstringstream cls2;
+        cls2 << L"Could not call FindServersOnNetwork service. Is the discovery server started? StatusCode";
+        std::wstring svalue = cls2.str();
+
+        SendLog(svalue, 0);
+
+        UA_Client_delete(client);
+        return EXIT_SUCCESS;
+    }
+
+    // output all the returned/registered servers
+    for (size_t i = 0; i < serverOnNetworkSize; i++) 
+    {
+        UA_ServerOnNetwork* server = &serverOnNetwork[i];
+        
+        {
+            //printf("Server[%lu]: %.*s", (unsigned long)i, (int)server->serverName.length, server->serverName.data);
+            UA_String uaString = *(UA_String*)server->serverName.data;
+
+            char* convert = (char*)UA_malloc(sizeof(char) * uaString.length + 1);
+            memcpy(convert, uaString.data, uaString.length);
+            convert[uaString.length] = '\0';
+
+            std::wstringstream cls2;
+            cls2 << convert;
+            std::wstring svalue = cls2.str();
+
+            SendLog(svalue, 0);
+
+        }
+
+
+        //printf("\n\tRecordID: %u", server->recordId);
+        {
+            //printf("\n\tDiscovery URL: %.*s", (int)server->discoveryUrl.length, server->discoveryUrl.data);
+            UA_String uaString = *(UA_String*)server->discoveryUrl.data;
+
+            char* convert = (char*)UA_malloc(sizeof(char) * uaString.length + 1);
+            memcpy(convert, uaString.data, uaString.length);
+            convert[uaString.length] = '\0';
+
+            std::wstringstream cls2;
+            cls2 << convert;
+            std::wstring svalue = cls2.str();
+
+            SendLog(svalue, 0);
+
+        }
+
+
+        //printf("\n\tCapabilities: ");
+        //for (size_t j = 0; j < server->serverCapabilitiesSize; j++) 
+        //{
+        //    printf("%.*s,", (int)server->serverCapabilities[j].length, server->serverCapabilities[j].data);
+        //}
+        //printf("\n\n");
+    }
+
+    UA_Array_delete(serverOnNetwork, serverOnNetworkSize, &UA_TYPES[UA_TYPES_SERVERONNETWORK]);
+
+
+//#endif
+    
+    return 0;
+}
+
 
 /*
 
