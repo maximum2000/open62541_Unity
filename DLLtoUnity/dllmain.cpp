@@ -255,11 +255,19 @@ extern "C" __declspec(dllexport) int OPC_ServerCreate()
     server = UA_Server_new();
     UA_ServerConfig_setDefault(UA_Server_getConfig(server));
     UA_ServerConfig* config = UA_Server_getConfig(server);
-    config->applicationDescription.applicationName =  UA_LOCALIZEDTEXT((char*)"en - US", (char*)"LContent OPC server");
-    config->applicationDescription.productUri = UA_STRING((char*)"https://LContent.ru");
+    config->applicationDescription.applicationName = UA_LOCALIZEDTEXT((char*)"en - US", (char*)"LContent OPC server");
+    UA_String_clear(&config->applicationDescription.productUri);
+    //config->applicationDescription.productUri = UA_STRING((char*)"https://LContent.ru");
+    config->applicationDescription.productUri = UA_String_fromChars((char*)"https://LContent.ru");
     //config->applicationDescription.applicationUri = UA_STRING((char*)"urn:unconfigured:application");
-    config->buildInfo.manufacturerName = UA_STRING((char*)"LContent.ru");
+    UA_String_clear(&config->buildInfo.manufacturerName);
+    //config->buildInfo.manufacturerName = UA_STRING((char*)"LContent.ru");
+    config->buildInfo.manufacturerName = UA_String_fromChars((char*)"LContent.ru");
     config->verifyRequestTimestamp = UA_RULEHANDLING_ACCEPT;
+
+    UA_String_clear(&config->applicationDescription.applicationUri);
+    config->applicationDescription.applicationUri = UA_String_fromChars("urn:lcontent.example.server_register");
+    //config->mdnsConfig.mdnsServerName = UA_String_fromChars("Sample Server");
 
 
     //config->publishingIntervalLimits.min = 10;
@@ -327,6 +335,7 @@ extern "C" __declspec(dllexport)  int OPC_ServerAddVariable(char* objectString, 
         std::string VariableName(descriptionString);
         UA_NodeId VariableNodeId;
         UA_VariableAttributes attr = UA_VariableAttributes_default;
+        
         if (type == 0)
         {
             UA_Double myDouble = 0;
@@ -341,7 +350,8 @@ extern "C" __declspec(dllexport)  int OPC_ServerAddVariable(char* objectString, 
         }
         attr.description = UA_LOCALIZEDTEXT((char*)"en - US", (char*)VariableName.c_str());
         attr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)VariableName.c_str()); //(char*)"MotorRPM"
-        
+        //!!!
+        attr.minimumSamplingInterval = 50;
         attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
         UA_Server_addVariableNode(server, UA_NODEID_NULL, ObjectNodeId, UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT), UA_QUALIFIEDNAME(1, (char*)VariableName.c_str()), UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, &VariableNodeId);
         ObjectNodes[objectName]->VariableNode_NameID[VariableName] = VariableNodeId;
@@ -364,6 +374,8 @@ extern "C" __declspec(dllexport)  int OPC_ServerAddVariable(char* objectString, 
         attr.description = UA_LOCALIZEDTEXT((char*)"en - US", descriptionString);   //(char*)"the.answer"
         attr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", displayNameString);     //(char*)"the answer"
         attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+        //!!!
+        attr.minimumSamplingInterval = 50;
         attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
         //Add the variable node to the information model
         UA_NodeId myIntegerNodeId = UA_NODEID_STRING(0, descriptionString);
@@ -1144,6 +1156,8 @@ extern "C" __declspec(dllexport) int OPC_ClientSubscriptions(double interval)
 
         //
         items[i] = UA_MonitoredItemCreateRequest_default(myDoubleNodeId1);
+        //!!!
+        items[i].requestedParameters.samplingInterval = 50;
         callbacks[i] = handler_TheAnswerChanged;
         contexts[i] = NULL;
         deleteCallbacks[i] = NULL;
