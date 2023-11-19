@@ -310,7 +310,7 @@ extern "C" __declspec(dllexport) int OPC_ServerUpdate()
 }
 
 //3. int OPC_ServerAddVariableDouble (objectname, varname, type)  - добавить переменную (ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ТИП (0-double/1-int)
-extern "C" __declspec(dllexport)  int OPC_ServerAddVariable(char* objectString, char* descriptionString, char* displayNameString, int type)
+extern "C" __declspec(dllexport)  int OPC_ServerAddVariable(char* objectString, char* descriptionString, char* displayNameString, int type, double samplingInterval)
 {
     std::string objectName(objectString);
     std::string browseObjectName(objectString);
@@ -351,7 +351,7 @@ extern "C" __declspec(dllexport)  int OPC_ServerAddVariable(char* objectString, 
         attr.description = UA_LOCALIZEDTEXT((char*)"en - US", (char*)VariableName.c_str());
         attr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", (char*)VariableName.c_str()); //(char*)"MotorRPM"
         //!!!
-        attr.minimumSamplingInterval = 50;
+        attr.minimumSamplingInterval = samplingInterval;//50;
         attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
         UA_Server_addVariableNode(server, UA_NODEID_NULL, ObjectNodeId, UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT), UA_QUALIFIEDNAME(1, (char*)VariableName.c_str()), UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, &VariableNodeId);
         ObjectNodes[objectName]->VariableNode_NameID[VariableName] = VariableNodeId;
@@ -375,7 +375,7 @@ extern "C" __declspec(dllexport)  int OPC_ServerAddVariable(char* objectString, 
         attr.displayName = UA_LOCALIZEDTEXT((char*)"en-US", displayNameString);     //(char*)"the answer"
         attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
         //!!!
-        attr.minimumSamplingInterval = 50;
+        attr.minimumSamplingInterval = samplingInterval;
         attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
         //Add the variable node to the information model
         UA_NodeId myIntegerNodeId = UA_NODEID_STRING(0, descriptionString);
@@ -1157,7 +1157,7 @@ extern "C" __declspec(dllexport) int OPC_ClientSubscriptions(double interval)
         //
         items[i] = UA_MonitoredItemCreateRequest_default(myDoubleNodeId1);
         //!!!
-        items[i].requestedParameters.samplingInterval = 50;
+        items[i].requestedParameters.samplingInterval = interval; // 50;
         callbacks[i] = handler_TheAnswerChanged;
         contexts[i] = NULL;
         deleteCallbacks[i] = NULL;
