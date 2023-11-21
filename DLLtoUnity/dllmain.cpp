@@ -90,7 +90,7 @@ std::map< unsigned int, SubscriptionElementClass*> allServerRegisteredSubscripti
 //функции сервера:
 //1. int OPC_ServerCreate () - создание сервера OPC
 //2. int OPC_ServerUpdate () - обновление сервера
-//3. int OPC_ServerAddVariable (objectname, varname, type)  - добавить переменную (ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ТИП (0-double/1-int)
+//3. int OPC_ServerAddVariableDouble (objectname, varname, type)  - добавить переменную (ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ТИП (0-double/1-int), интервал обновления в мс, например 1000 - 1раз в сукунду
 //4. int OPC_ServerWriteValueDouble (objectname, varname, value)  - изменить переменную типа DOUBLE (ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ЗНАЧЕНИЕ)
 //5. double OPC_ServerReadValueDouble (objectname, varname) - прочитать напрямую переменную типа DOUBLE (ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ)
 //6. int OPC_ServerWriteValueString - изменить переменную типа STRING (ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ЗНАЧЕНИЕ)
@@ -311,7 +311,7 @@ extern "C" __declspec(dllexport) int OPC_ServerUpdate()
     return 0;
 }
 
-//3. int OPC_ServerAddVariableDouble (objectname, varname, type)  - добавить переменную (ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ТИП (0-double/1-int)
+//3. int OPC_ServerAddVariableDouble (objectname, varname, type)  - добавить переменную (ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ТИП (0-double/1-int), интервал обновления в мс, например 1000 - 1раз в сукунду
 extern "C" __declspec(dllexport)  int OPC_ServerAddVariable(char* objectString, char* descriptionString, char* displayNameString, int type, double samplingInterval)
 {
     std::string objectName(objectString);
@@ -577,7 +577,7 @@ static UA_StatusCode helloWorldMethodCallback(UA_Server* server,
     size_t outputSize, UA_Variant* output)
 {
     UA_String* inputStr = (UA_String*)input->data;
-    UA_String tmp = UA_STRING_ALLOC("Hello ");
+    UA_String tmp = UA_STRING_ALLOC("Method:"); //"Hello "
     if (inputStr->length > 0) {
         tmp.data = (UA_Byte*)UA_realloc(tmp.data, tmp.length + inputStr->length);
         memcpy(&tmp.data[tmp.length], inputStr->data, inputStr->length);
@@ -598,7 +598,7 @@ static UA_StatusCode helloWorldMethodCallback(UA_Server* server,
     std::wstring name = cls.str();
 
     SendMethodCall(name, methodId->identifier.numeric);
-
+    free(convert);
 
     return UA_STATUSCODE_GOOD;
 }
