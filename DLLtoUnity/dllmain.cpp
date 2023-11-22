@@ -80,6 +80,33 @@ std::map< unsigned int, SubscriptionElementClass*> allRegisteredSubscription;
 std::map< unsigned int, SubscriptionElementClass*> allServerRegisteredSubscription;
 
 
+/*
+std::string test = "not Loaded";
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
+{
+    test = "loaded"; //You also change on this location the value of a variable
+    switch (ul_reason_for_call)
+    {
+    case DLL_PROCESS_ATTACH:
+        MessageBoxA(NULL, "DLL_PROCESS_ATTACH", "DLL_PROCESS_ATTACH", NULL);
+        break;
+    case DLL_THREAD_ATTACH:
+        MessageBoxA(NULL, "DLL_THREAD_ATTACH", "DLL_THREAD_ATTACH", NULL);
+        break;
+    case DLL_THREAD_DETACH:
+        MessageBoxA(NULL, "DLL_THREAD_DETACH", "DLL_THREAD_DETACH", NULL);
+        break;
+    case DLL_PROCESS_DETACH:
+        MessageBoxA(NULL, "DLL_PROCESS_DETACH", "DLL_PROCESS_DETACH", NULL);
+        break;
+        break;
+    }
+    return TRUE;
+}
+*/
+
+
+
 //функции общие
 // RegisterDebugCallback - регистрация callback'ов
 //1. SendLog - дебаг-вывод в unity
@@ -129,6 +156,12 @@ std::map< unsigned int, SubscriptionElementClass*> allServerRegisteredSubscripti
 //client_find_servers - поиск сервера                                                                           -
 //client_subscription_loop - обработка закрытия сервера                                                         -
 //client_connect_loop - автоподключение                                                                         -
+
+
+
+
+
+
 
 
 
@@ -1300,10 +1333,10 @@ extern "C" __declspec(dllexport) int OPC_Client_findServers()
     }
     */
 
-
+#ifdef UA_ENABLE_DISCOVERY
     //Example for calling FindServersOnNetwork
     {
-        //    #ifdef UA_ENABLE_DISCOVERY
+        
         UA_ServerOnNetwork* serverOnNetwork = NULL;
         size_t serverOnNetworkSize = 0;
         bool ok = true;
@@ -1438,7 +1471,7 @@ extern "C" __declspec(dllexport) int OPC_Client_findServers()
     }
 
 
-//#endif
+    #endif
     
     return 0;
 }
