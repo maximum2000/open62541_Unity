@@ -75,7 +75,7 @@ std::vector <SubscriptionElementClass*> allClientSubscription;
 //unsigned int monID, 
 std::map< unsigned int, SubscriptionElementClass*> allRegisteredSubscription;
 
-//подписка для клиента
+//подписка для сервера
 //NodeID, ....
 std::map< unsigned int, SubscriptionElementClass*> allServerRegisteredSubscription;
 
@@ -285,6 +285,10 @@ void ServerSendValueChange(const std::wstring& strObj, const std::wstring& strVa
 //1. int OPC_ServerCreate () - создание сервера OPC
 extern "C" __declspec(dllexport) int OPC_ServerCreate()
 {
+    //reinit
+    ObjectNodes = std::map <std::string, ObjectNodeVariables*>();
+    allServerRegisteredSubscription = std::map <unsigned int, SubscriptionElementClass*>();
+
     SendLog(L"debug DLL:OPCserverCreate ...", 0);
 
     server = UA_Server_new();
@@ -586,8 +590,8 @@ extern "C" __declspec(dllexport) int OPC_ServerReadValueString(char* returnStrin
 extern "C" __declspec(dllexport) int OPC_ServerShutdown()
 {
     SendLog(L"debug DLL:OPC_ServerShutdown... ", 0);
-    UA_Server_delete(server);
     UA_StatusCode retval = UA_Server_run_shutdown(server);
+    //UA_Server_delete(server);
     return retval == UA_STATUSCODE_GOOD ? EXIT_SUCCESS : EXIT_FAILURE;
 
     //UA_Server_run_shutdown
@@ -789,6 +793,11 @@ UA_Client* client;
 //1. int OPC_ClientConnect (url) - ПОДКЛЮЧЕНИЕ К СЕРВЕРУ "opc.tcp://localhost:4840"
 extern "C" __declspec(dllexport) int OPC_ClientConnect(char* url)
 {
+    //reinit
+    ClientObjectNodes = std::map < std::string, ObjectNodeVariables*>();
+    allClientSubscription = std::vector <SubscriptionElementClass*>();
+    allRegisteredSubscription = std::map< unsigned int, SubscriptionElementClass*>();
+
     SendLog(L"debug DLL:OPC_ClientConnect... ", 0);
     client = UA_Client_new();
     UA_ClientConfig_setDefault(UA_Client_getConfig(client));
