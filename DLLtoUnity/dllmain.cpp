@@ -222,7 +222,7 @@ void SendMethodCall(const std::wstring& str, const unsigned int& nodeid)
 // Call this function from a Untiy script
 extern "C"
 {
-    typedef void(*ValueChangeCallback)(const char* message1, int size1, const char* message2, int size2,  unsigned int monID, double value);
+    typedef void(*ValueChangeCallback)(const char* message1, int size1, const char* message2, int size2,  unsigned int monID, double value, const char* strvalue, int strvalue_size);
     static ValueChangeCallback callbackValueChangeFunction = nullptr;
     __declspec(dllexport) void RegisterValueChangeCallback(ValueChangeCallback callback);
 }
@@ -232,15 +232,19 @@ void RegisterValueChangeCallback(ValueChangeCallback callback)
 }
 //nothrow
 
-void SendValueChange(const std::wstring& strObj, const std::wstring& strVar, const unsigned int& monID, const double& value)
+void SendValueChange(const std::wstring& strObj, const std::wstring& strVar, const unsigned int& monID, const double& value, const std::wstring& strvalue)
 {
     std::string s1(strObj.begin(), strObj.end());
     const char* tmsg1 = s1.c_str();
     std::string s2(strVar.begin(), strVar.end());
     const char* tmsg2 = s2.c_str();
+
+    std::string s3(strvalue.begin(), strvalue.end());
+    const char* tmsg3 = s3.c_str();
+
     if (callbackValueChangeFunction != nullptr)
     {
-        callbackValueChangeFunction(tmsg1, (int)strlen(tmsg1), tmsg2, (int)strlen(tmsg2), (unsigned int) monID, (double)value);
+        callbackValueChangeFunction(tmsg1, (int)strlen(tmsg1), tmsg2, (int)strlen(tmsg2), (unsigned int) monID, (double)value, tmsg3, (int)strlen(tmsg3));
     }
 }
 //SendValueChange(1000, 3.141516);
@@ -1118,21 +1122,32 @@ static void handler_TheAnswerChanged(UA_Client* client, UA_UInt32 subId, void* s
     {
         if (value->hasValue == true)
         {
+            std::string oname = allRegisteredSubscription[monId]->objectname;
+            std::string vname = allRegisteredSubscription[monId]->variablename;
+
+            std::wstring woname(oname.begin(), oname.end());
+            std::wstring wvname(vname.begin(), vname.end());
+
             if (UA_Variant_hasScalarType(&value->value, &UA_TYPES[UA_TYPES_DOUBLE]))
             {
                 UA_Double severity = *(UA_Double*)value->value.data;
-                std::string oname = allRegisteredSubscription[monId]->objectname;
-                std::string vname = allRegisteredSubscription[monId]->variablename;
-
-                std::wstring woname(oname.begin(), oname.end());
-                std::wstring wvname(vname.begin(), vname.end());
-                SendValueChange(woname, wvname,  monId, severity);
+                SendValueChange(woname, wvname,  monId, severity, L"");
                 //SendLog(L"Notification1 double", 0);
             }
-            else if (UA_Variant_hasScalarType(&value->value, &UA_TYPES[UA_TYPES_LOCALIZEDTEXT]))
+            else if (UA_Variant_hasScalarType(&value->value, &UA_TYPES[UA_TYPES_STRING]))
             {
-                UA_LocalizedText* lt = (UA_LocalizedText*)value->value.data;
-                SendLog(L"Notification1 text", 0);
+                UA_String* lt = (UA_String*)value->value.data;
+                //std::wstringstream ss1;
+                //ss1 << lt->text.data;
+                //std::wstring str1 = ss1.str();
+                char* convert = (char*)UA_malloc(sizeof(char) * lt->length + 1);
+                memcpy(convert, lt->data, lt->length);
+                convert[lt->length] = '\0';
+                std::wstringstream ss1;
+                ss1 << convert;
+                std::wstring str1 = ss1.str();
+                SendValueChange(woname, wvname, monId, 0, str1);
+                //SendLog(L"Notification1 text", 0);
             }
         }
     }
