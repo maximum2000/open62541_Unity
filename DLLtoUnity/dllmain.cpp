@@ -142,23 +142,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 
 
 //сделать:
-//надо или тип идентификатора менять
-//или запоминать id за именем переменной
-//да, строка имя объекта и имя переменной - это нихера не ID
-//ID нужно дополнительно задавать значит... а вот будет - ли SCADA работать с переменными заданными строкой - вопрос....
-//UA_NodeId id4 = UA_NODEID_STRING_ALLOC(1, "RTid");
-//UA_NodeId myIntegerNodeId = UA_NODEID_STRING(0, descriptionString);
-//UA_QualifiedName myDoubleName = UA_QUALIFIEDNAME(0, displayNameString);
-//UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
-//UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
-//UA_Server_addVariableNode(server, myIntegerNodeId, parentNodeId, parentReferenceNodeId, myDoubleName, UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, NULL);
-//UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE)
-//эта штука просто выдает следующий свободный номер в namespace
-//а если сделать вот так ... UA_NODEID_STRING(UA_UInt16 nsIndex, char* chars)  то походу ID будет по строке
-//сделаю для string тогда еще варианты функций, пусть IDшник тогда совпадает с ИМЯОБЪЕКТА.ИМЯПЕРЕМЕННОЙ
+//надо или тип идентификатора менять + сделано см. #ifndef stringID  // UA_NODEID_NUMERIC / UA_NODEID_STRING 0 - NAMESPACE NS0
 //tutorial_server_events - триггеры и события                                                                   -
 //Про методы: например можно сделать метод - создать игрока передать туда имя и тип и в ответ получить ок или не ок, можно и в ответ имя получить
-// UA_NODEID_NUMERIC / UA_NODEID_STRING 0 - NAMESPACE NS0
 
 
 //интересно:
@@ -366,6 +352,8 @@ extern "C" __declspec(dllexport) int OPC_ServerUpdate()
     return 0;
 }
 
+//#define stringID true
+
 //3. int OPC_ServerAddVariableDouble (objectname, varname, type)  - добавить переменную (ИМЯОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ТИП (0-double/1-int), интервал обновления в мс, например 1000 - 1раз в сукунду
 extern "C" __declspec(dllexport)  int OPC_ServerAddVariable(char* objectString, char* descriptionString, char* displayNameString, int type, double samplingInterval)
 {
@@ -390,7 +378,14 @@ extern "C" __declspec(dllexport)  int OPC_ServerAddVariable(char* objectString, 
         //теперь создаем атрибут в объекте
         UA_NodeId ObjectNodeId = ObjectNodes[objectName]->nodeId;
         std::string VariableName(descriptionString);
+        
+#ifndef stringID 
         UA_NodeId VariableNodeId;
+#else
+        std::string fullname = objectName + "." + VariableName;
+        UA_NodeId VariableNodeId = UA_NODEID_STRING_ALLOC(0, (char*)fullname.c_str());
+#endif
+
         UA_VariableAttributes attr = UA_VariableAttributes_default;
         
         if (type == 0)
@@ -410,7 +405,13 @@ extern "C" __declspec(dllexport)  int OPC_ServerAddVariable(char* objectString, 
         //!!!
         attr.minimumSamplingInterval = samplingInterval;//50;
         attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+
+#ifndef stringID 
         UA_Server_addVariableNode(server, UA_NODEID_NULL, ObjectNodeId, UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT), UA_QUALIFIEDNAME(1, (char*)VariableName.c_str()), UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, &VariableNodeId);
+#else
+        UA_Server_addVariableNode(server, VariableNodeId, ObjectNodeId, UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT), UA_QUALIFIEDNAME(1, (char*)VariableName.c_str()), UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, NULL);
+#endif
+
         ObjectNodes[objectName]->VariableNode_NameID[VariableName] = VariableNodeId;
     }
     //если это НЕ атрибут объекта
