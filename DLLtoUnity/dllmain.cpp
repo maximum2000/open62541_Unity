@@ -129,7 +129,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 
 //функции клиента:
 //1. int OPC_ClientConnect (url) - ПОДКЛЮЧЕНИЕ К СЕРВЕРУ "opc.tcp://localhost:4840"
-//2. int OPC_ClientWriteValueDouble (objectname, varname, value) - записать переменную типа DOUBLE (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ЗНАЧЕНИЕ)
+//2a. int OPC_ClientWriteValueDouble (objectname, varname, value) - записать переменную типа DOUBLE (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ЗНАЧЕНИЕ)
+    //2b. int OPC_ClientWriteValueString (objectname, varname, value) - записать переменную типа STRING (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ЗНАЧЕНИЕ)
 //3. double OPC_ClientReadValueDouble (objectname, varname) - ПРЯМОЕ чтение переменной типа DOUBLE (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ)
 //4. int OPC_ClientUpdate () - обновление клиента
 //5. int OPC_ClientDelete() - выключение клиента
@@ -832,7 +833,7 @@ extern "C" __declspec(dllexport) int OPC_ClientConnect(char* url)
     return 0;
 }
 
-//2. int OPC_ClientWriteValueDouble (objectname, varname, value) - записать переменную типа DOUBLE (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ЗНАЧЕНИЕ)
+//2a. int OPC_ClientWriteValueDouble (objectname, varname, value) - записать переменную типа DOUBLE (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ЗНАЧЕНИЕ)
 extern "C" __declspec(dllexport) int OPC_ClientWriteValueDouble(char* object2, char* description, double _value)
 {
     UA_NodeId myDoubleNodeId;
@@ -860,6 +861,34 @@ extern "C" __declspec(dllexport) int OPC_ClientWriteValueDouble(char* object2, c
 
     UA_Variant* myVariant = UA_Variant_new();
     UA_Variant_setScalarCopy(myVariant, &myDouble, &UA_TYPES[UA_TYPES_DOUBLE]);
+    UA_Client_writeValueAttribute(client, myDoubleNodeId, myVariant);
+    UA_Variant_delete(myVariant);
+
+
+    return 0;
+}
+
+
+//2b. int OPC_ClientWriteValueString (objectname, varname, value) - записать переменную типа STRING (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ, ЗНАЧЕНИЕ)
+extern "C" __declspec(dllexport) int OPC_ClientWriteValueString(char* object2, char* description, char* _value)
+{
+    UA_NodeId myDoubleNodeId;
+    std::string objectName(object2);
+    std::string attributeName(description);
+
+    //если это атрибут объекта
+    if (objectName != "")
+    {
+        myDoubleNodeId = ClientObjectNodes[objectName]->VariableNode_NameID[attributeName];
+    }
+    else
+    {
+        myDoubleNodeId = UA_NODEID_STRING(0, description);
+    }
+    
+    UA_String argString = UA_STRING(_value);
+    UA_Variant* myVariant = UA_Variant_new();
+    UA_Variant_setScalarCopy(myVariant, &argString, &UA_TYPES[UA_TYPES_STRING]);
     UA_Client_writeValueAttribute(client, myDoubleNodeId, myVariant);
     UA_Variant_delete(myVariant);
 
