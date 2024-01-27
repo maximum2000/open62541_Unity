@@ -810,6 +810,19 @@ extern "C" __declspec(dllexport) int OPC_ServerSubscription(char* objectString, 
 //---------------------------------CLIENT---------------------------------------
 UA_Client* client;
 
+//проверка есть-ли такой объект с таким свойством
+bool checkFunction(std::string objectName, std::string attributeName)
+{
+    if (ClientObjectNodes.count(objectName) != 0)
+    {
+        if (ClientObjectNodes[objectName]->VariableNode_NameID.count(attributeName) != 0) return true;
+    }
+    std::string str = "debug DLL:checkFunction... objectName=" + objectName + " with attributeName=" + attributeName + " not exist in OPC";
+    std::wstring wstr(str.begin(), str.end());
+    SendLog(wstr, 0);
+    return false;
+}
+
 //1. int OPC_ClientConnect (url) - ПОДКЛЮЧЕНИЕ К СЕРВЕРУ "opc.tcp://localhost:4840"
 extern "C" __declspec(dllexport) int OPC_ClientConnect(char* url)
 {
@@ -843,6 +856,7 @@ extern "C" __declspec(dllexport) int OPC_ClientWriteValueDouble(char* object2, c
     //если это атрибут объекта
     if (objectName != "")
     {
+        if (checkFunction(objectName, attributeName) == false) return 0;
         myDoubleNodeId = ClientObjectNodes[objectName]->VariableNode_NameID[attributeName];
     }
     else
@@ -879,6 +893,7 @@ extern "C" __declspec(dllexport) int OPC_ClientWriteValueString(char* object2, c
     //если это атрибут объекта
     if (objectName != "")
     {
+        if (checkFunction(objectName, attributeName) == false) return 0;
         myDoubleNodeId = ClientObjectNodes[objectName]->VariableNode_NameID[attributeName];
     }
     else
@@ -906,6 +921,7 @@ extern "C" __declspec(dllexport) double OPC_ClientReadValueDouble(char* object2,
     //если это атрибут объекта
     if (objectName != "")
     {
+        if (checkFunction(objectName, attributeName) == false) return 0;
         myDoubleNodeId = ClientObjectNodes[objectName]->VariableNode_NameID[attributeName];
     }
     else
@@ -1316,6 +1332,11 @@ extern "C" __declspec(dllexport) void OPC_ClientSubscriptionAddVariable(char* _o
 {
     std::string objectname(_objectname);
     std::string varname(_varname);
+
+    if (objectname != "")
+    {
+        if (checkFunction(objectname, varname) == false) return;
+    }
 
     SubscriptionElementClass* temp = new SubscriptionElementClass();
     temp->objectname = objectname;
