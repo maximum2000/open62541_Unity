@@ -139,7 +139,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 //8. int OPC_ClientSubscriptions - выполняет подписку на все перменные, ранее переданные через OPC_ClientSubscriptionAddVariable. Параметр - частота опроса, мсек, т.е. 1000=1с
 //9. OPC_ClientSubscriptionAddVariable - добавляет в подписку (выполнять до OPC_ClientSubscriptions) одну переменную (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ)
 //10. OPC_Client_findServers ()
-
+//11. int OPC_Check_Object - возвразает 1 если такой объект с таким параметром есть, иначе 0 (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ) (выполнять после OPC_ClientSubscriptions)
 
 
 //сделать:
@@ -1562,6 +1562,22 @@ extern "C" __declspec(dllexport) int OPC_Client_findServers()
 
     #endif
     
+    return 0;
+}
+
+
+
+//11. int OPC_Check_Object - возвращает 1 если такой объект с таким параметром есть, иначе 0 (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ) (выполнять после OPC_ClientSubscriptions)
+extern "C" __declspec(dllexport) int OPC_Check_Object(char* _objectname, char* _varname)
+{
+    std::string objectname(_objectname);
+    std::string varname(_varname);
+
+    if (objectname != "")
+    {
+        if (checkFunction(objectname, varname) == true) return 1;
+    }
+
     return 0;
 }
 
