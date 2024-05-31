@@ -246,6 +246,11 @@ public class OPCUA_SERVER_DLL : MonoBehaviour
     [DllImport("DLL1")]
     public static extern int OPC_Client_findServers();
 
+    //11. OPC_Check_Object - int OPC_Check_Object - возвращает 1 если такой объект с таким параметром есть, иначе 0 (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ) (выполнять после OPC_ClientSubscriptions)
+    [DllImport("DLL1")]
+    public static extern int OPC_Check_Object(StringBuilder objectname, StringBuilder varname);
+
+
 
 
 
@@ -492,6 +497,23 @@ public class OPCUA_SERVER_DLL : MonoBehaviour
         OPC_ClientSubscriptionAddVariable(objectname, varname);
         return;
     }
+
+
+    //возвращает 1 если такой объект с таким параметром есть, иначе 0 (ИМЯ ОБЪЕКТА, ИМЯ ПЕРЕМЕННОЙ) (выполнять после OPC_ClientSubscriptions)
+    public int Check_ObjectVariable(string _objectname, string _varname)
+    {
+        if (clientConnected == false)
+        {
+            Debug.Log("Client not connected!!! Stop!");
+            return;
+        }
+
+        StringBuilder objectname = new StringBuilder(_objectname, 100);
+        StringBuilder varname = new StringBuilder(_varname, 100);
+        
+        return OPC_Check_Object(objectname, varname); 
+    }
+
 
     public void Client_findServers()
     {
