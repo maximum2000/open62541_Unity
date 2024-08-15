@@ -194,6 +194,7 @@ void SendLog(const std::wstring& str, const int& color)
     {
         callbackFunction(tmsg, (int)color, (int)strlen(tmsg));
     }
+    delete[] tmsg;
 }
 //SendLog(L"debug DLL:connectionLost", 0);
 
@@ -217,6 +218,7 @@ void SendMethodCall(const std::wstring& str, const unsigned int& nodeid)
     {
         callbackMethodCallFunction(tmsg, (unsigned int)nodeid, (int)strlen(tmsg));
     }
+    delete[] tmsg;
 }
 //SendMethodCall(L"Hello word", 62541);
 
@@ -247,6 +249,10 @@ void SendValueChange(const std::wstring& strObj, const std::wstring& strVar, con
     {
         callbackValueChangeFunction(tmsg1, (int)strlen(tmsg1), tmsg2, (int)strlen(tmsg2), (unsigned int) monID, (double)value, tmsg3, (int)strlen(tmsg3));
     }
+
+    delete[] tmsg1;
+    delete[] tmsg2;
+    delete[] tmsg3;
 }
 //SendValueChange(1000, 3.141516);
 
@@ -277,6 +283,9 @@ void ServerSendValueChange(const std::wstring& strObj, const std::wstring& strVa
     {
         ServerCallbackValueChangeFunction(tmsg1, (int)strlen(tmsg1), tmsg2, (int)strlen(tmsg2), (unsigned int)monID, (double)value);
     }
+
+    delete[] tmsg1;
+    delete[] tmsg2;
 }
 //ServerSendValueChange(1000, 3.141516);
 
@@ -600,6 +609,9 @@ extern "C" __declspec(dllexport) int OPC_ServerReadValueString(char* returnStrin
     strcpy_s(returnString, returnStringLength, svalue.c_str());
     
     UA_Variant_clear(&out);
+
+    //delete[] convert;
+    free(convert);
     
     return 0;
 }
@@ -655,6 +667,8 @@ static UA_StatusCode helloWorldMethodCallback(UA_Server* server,
     std::wstring name = cls.str();
 
     SendMethodCall(name, methodId->identifier.numeric);
+
+    //delete[] convert;
     free(convert);
 
     return UA_STATUSCODE_GOOD;
@@ -755,6 +769,8 @@ static void serverDataChangeNotificationCallback(UA_Server* server, UA_UInt32 mo
             {
                 UA_LocalizedText* lt = (UA_LocalizedText*)value->value.data;
                 SendLog(L"serverDataChangeNotificationCallback: Notification1 text", 0);
+                // !!!
+                delete[] lt;
             }
         }
     }
@@ -1094,6 +1110,9 @@ void Client_Service_browse_recursive(UA_NodeId browse_node, std::string ParentNa
                         std::string parentname(convert);
                         Client_Service_browse_recursive(ref->nodeId.nodeId, parentname);
                     }
+
+                    //delete[] convert;
+                    free(convert);
                 }
             }
             else if (ref->nodeId.nodeId.identifierType == UA_NODEIDTYPE_STRING)
@@ -1149,6 +1168,8 @@ void Client_Service_browse_recursive(UA_NodeId browse_node, std::string ParentNa
                     std::string parentname(convert);
                     Client_Service_browse_recursive(ref->nodeId.nodeId, parentname);
                 }
+
+                free(convert);
             }
         }
     }
@@ -1207,6 +1228,8 @@ static void handler_TheAnswerChanged(UA_Client* client, UA_UInt32 subId, void* s
                 ss1 << convert;
                 std::wstring str1 = ss1.str();
                 SendValueChange(woname, wvname, monId, 0, str1);
+
+                free(convert);
                 //SendLog(L"Notification1 text", 0);
             }
         }
@@ -1361,6 +1384,7 @@ void Logg(UA_String uaString)
     std::wstring svalue = cls2.str();
 
     SendLog(svalue, 0);
+    free(convert);
 }
 void Logg2(std::string wString)
 {
