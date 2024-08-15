@@ -767,10 +767,10 @@ static void serverDataChangeNotificationCallback(UA_Server* server, UA_UInt32 mo
             }
             else if (UA_Variant_hasScalarType(&value->value, &UA_TYPES[UA_TYPES_LOCALIZEDTEXT]))
             {
-                UA_LocalizedText* lt = (UA_LocalizedText*)value->value.data;
+                //UA_LocalizedText* lt = (UA_LocalizedText*)value->value.data;
                 SendLog(L"serverDataChangeNotificationCallback: Notification1 text", 0);
                 // !!!
-                delete[] lt;
+                //delete[] lt;
             }
         }
     }
